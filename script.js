@@ -45,14 +45,15 @@ var airplane = new Airplane(200,200);
 
 processing.draw = function () {
 	processing.background(72,208,235);
+	processing.text(processing.keyPressed,100,100);
 	airplane.update();
 	airplane.display();
-	if (processing.keyPressed===true) {
-		airplane.turn(1);
-	}
+	if (processing.keyPressed === true) {}
 };
 
-
+processing.keyReleased = function () {
+	processing.background(255,255,255);
+};
 }
 var canvas = document.getElementById("canvas1");
 var p = new Processing(canvas, sketchProc);
