@@ -11,8 +11,22 @@ var smokes = []; //smoke behind the airplane
 var smokeTime = 0; //last time smoke was deployed
 var offset = 100; //offset for scene shifting
 var rings = [];
+var grounds = [];
+var groundLevel = 50; //offset of the ground from the bottom
+var leftMostGround = 400; 
+var rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
 
 img = processing.loadImage('plane.png'); //169x79px
+
+var Ground = function (xCenter) { //ground function, later will be animated
+	this.xCenter = xCenter;
+};
+
+Ground.prototype.display = function () {
+	processing.noStroke();
+	processing.fill(64,49,23);
+	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
+};
 
 var Ring = function (x,y,radius) {
 	this.position = new processing.PVector(x,y);
@@ -28,7 +42,7 @@ Ring.prototype.display = function () {
 	processing.ellipse(this.position.x,this.position.y,this.radius,this.radius*2);
 	processing.stroke(0,0,0,this.opacity);
 	processing.strokeWeight(4);
-	processing.line(this.position.x,this.position.y+this.radius+s,this.position.x,CHEIGHT);
+	processing.line(this.position.x,this.position.y+this.radius+s,this.position.x,CHEIGHT-groundLevel);
 };
 
 Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
@@ -90,7 +104,7 @@ var updateSmokes = function () { //function that gets called in the draw method 
 			}
 		}
 	}
-}
+};
 
 var Airplane = function (x,y) {
 	this.position = new processing.PVector(x,y);
@@ -146,13 +160,25 @@ for (var i=0;i<5;i++) {
 	y = Math.random()*520+40;
 	rings.push(new Ring(x,y,30));
 }
-
+grounds.push(new Ground(400));
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	processing.background(72,208,235);
 	shiftScene(airplane);
-	updateSmokes();
 	controls();
+	updateSmokes();
+	for (var i=0;i<grounds.length;i++) {
+		grounds[i].display();
+	}
+	
+	if (airplane.position.x > rightMostGround) {
+		grounds.push(new Ground(rightMostGround+800));
+		rightMostGround += 800;
+	} else if (airplane.position.x < leftMostGround) {
+		grounds.push(new Ground(leftMostGround-800));
+		leftMostGround -= 800;
+	}
+	
 	for (var i=0;i<rings.length;i++) {
 		rings[i].display();
 		if (rings[i].checkThrough(airplane)) {
