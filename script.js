@@ -6,9 +6,30 @@ var CHEIGHT = 600;
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
-
+var xTranslate = 0; //how much the scene is translated in the x-direction
 var smokes = []; //smoke behind the airplane
 var smokeTime = 0; //last time smoke was deployed
+var offset = 100; //offset for scene shifting
+
+var controls = function () {
+	if (KEY === 37 || KEY === 38) {
+		airplane.turn(-1);
+	} else if (KEY === 39 || KEY === 40) {
+		airplane.turn(1);
+	}
+};
+
+var shiftScene = function (airplane) { //shifts the scene when the plane gets offset close to the margin
+	processing.stroke(255,0,0);
+	processing.translate(xTranslate,0);
+	processing.line(800-offset-xTranslate,0,800-offset-xTranslate,600);
+	processing.line(offset-xTranslate,0,offset-xTranslate,600);
+	if (airplane.position.x > 800-offset-xTranslate) {
+		xTranslate -= airplane.velocity.x;
+	} else if (airplane.position.x < offset-xTranslate) {
+		xTranslate -= airplane.velocity.x;
+	}
+	};
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
@@ -45,10 +66,10 @@ var updateSmokes = function () { //function that gets called in the draw method 
 	}
 }
 
-
 var Airplane = function (x,y) {
 	this.position = new processing.PVector(x,y);
-	this.velocity = 2; //magnitude, only in the x-direction
+	this.velocityMag = 2; //magnitude, only in the x-direction
+	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
 	this.angle = 3.14/4; //declination from the X axis in radians
 	this.acceleration = 0;
 	this.angleMag = 0.05; //magnitude with which the plane will be turning
@@ -56,11 +77,10 @@ var Airplane = function (x,y) {
 
 Airplane.prototype.update = function () {
 	//updates current position according to current velocity magnitude and angle using trig
-	this.velocity += this.acceleration;
-	var x = this.velocity * processing.cos(this.angle);
-	var y = this.velocity * processing.sin(this.angle);
-	this.position.x += x;
-	this.position.y += y;
+	this.velocityMag += this.acceleration;
+	this.velocity.x = this.velocityMag * processing.cos(this.angle);
+	this.velocity.y = this.velocityMag * processing.sin(this.angle);
+	this.position.add(this.velocity);
 };
 
 Airplane.prototype.turn = function (direction) {
@@ -87,19 +107,13 @@ Airplane.prototype.run = function () { //gets called in the draw method, handles
 
 var airplane = new Airplane(200,200);
 
+
+
 processing.draw = function () {
 	processing.background(72,208,235);
-	if (KEY === 37 || KEY === 38) {
-		airplane.turn(-1);
-	} else if (KEY === 39 || KEY === 40) {
-		airplane.turn(1);
-	}
-	if (airplane.position.x > 700) {
-		processing.translate(5,0);
-		processing.pushMatrix();
-		processing.popMatrix();
-	}
+	shiftScene(airplane);
 	updateSmokes();
+	controls();
 	airplane.run();
 };
 
