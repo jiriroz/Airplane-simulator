@@ -10,8 +10,25 @@ var xTranslate = 0; //how much the scene is translated in the x-direction
 var smokes = []; //smoke behind the airplane
 var smokeTime = 0; //last time smoke was deployed
 var offset = 100; //offset for scene shifting
+var rings = [];
 
 img = processing.loadImage('plane.png'); //169x79px
+
+var Ring = function (x,y,radius) {
+	this.position = new processing.PVector(x,y);
+	this.radius = radius; //radius in the y-direction
+};
+
+Ring.prototype.display = function () {
+	var s = 5;
+	processing.noFill();
+	processing.strokeWeight(s);
+	processing.stroke(255,0,0);
+	processing.ellipse(this.position.x,this.position.y,this.radius,this.radius*2);
+	processing.stroke(0,0,0);
+	processing.strokeWeight(4);
+	processing.line(this.position.x,this.position.y+this.radius+s,this.position.x,CHEIGHT);
+};
 
 var controls = function () {
 	if (KEY === 37 || KEY === 38) {
@@ -35,13 +52,13 @@ var shiftScene = function (airplane) { //shifts the scene when the plane gets of
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
-	this.opacity = Math.random()*150+30;
+	this.opacity = Math.random()*150+50;
 	radius = Math.random()*4+5 //implement standard distribution
 	this.radius = radius;
 };
 
 Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= 0.6;
+	this.opacity -= 0.3;
 };
 
 Smoke.prototype.display = function () {
@@ -73,16 +90,22 @@ var Airplane = function (x,y) {
 	this.velocityMag = 2; //magnitude, only in the x-direction
 	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
 	this.angle = 0; //declination from the X axis in radians
-	this.acceleration = 0;
+	this.acceleration = new processing.PVector(0,0);
 	this.angleMag = 0.03; //magnitude with which the plane will be turning
 };
 
 Airplane.prototype.update = function () {
 	//updates current position according to current velocity magnitude and angle using trig
-	this.velocityMag += this.acceleration;
-	this.velocity.x = this.velocityMag * processing.cos(this.angle);
-	this.velocity.y = this.velocityMag * processing.sin(this.angle);
+	//this.velocityMag += this.acceleration;
+	this.velocity.x = this.velocityMag * Math.cos(this.angle);
+	this.velocity.y = this.velocityMag * Math.sin(this.angle);
+	this.velocity.add(this.acceleration);
 	this.position.add(this.velocity);
+	this.acceleration.mult(0);
+};
+
+Airplane.prototype.applyForce = function (force) {
+	this.acceleration.add(force);
 };
 
 Airplane.prototype.turn = function (direction) {
@@ -108,7 +131,14 @@ Airplane.prototype.run = function () { //gets called in the draw method, handles
 	airplane.display();
 };
 
-var airplane = new Airplane(200,200);
+var airplane = new Airplane(150,500);
+var x = 0;
+var y = 0;
+for (var i=0;i<5;i++) {
+	x = Math.random()*760+20;
+	y = Math.random()*520+40;
+	rings.push(new Ring(x,y,30));
+}
 
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
@@ -116,6 +146,9 @@ processing.draw = function () { //what gets called before the shift scene stays 
 	shiftScene(airplane);
 	updateSmokes();
 	controls();
+	for (var i=0;i<rings.length;i++) {
+		rings[i].display();
+	};
 	airplane.run();
 };
 
