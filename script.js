@@ -11,6 +11,8 @@ var smokes = []; //smoke behind the airplane
 var smokeTime = 0; //last time smoke was deployed
 var offset = 100; //offset for scene shifting
 
+img = processing.loadImage('plane.png'); //169x79px
+
 var controls = function () {
 	if (KEY === 37 || KEY === 38) {
 		airplane.turn(-1);
@@ -22,14 +24,14 @@ var controls = function () {
 var shiftScene = function (airplane) { //shifts the scene when the plane gets offset close to the margin
 	processing.stroke(255,0,0);
 	processing.translate(xTranslate,0);
-	processing.line(800-offset-xTranslate,0,800-offset-xTranslate,600);
-	processing.line(offset-xTranslate,0,offset-xTranslate,600);
+	//processing.line(800-offset-xTranslate,0,800-offset-xTranslate,600);
+	//sprocessing.line(offset-xTranslate,0,offset-xTranslate,600);
 	if (airplane.position.x > 800-offset-xTranslate) {
 		xTranslate -= airplane.velocity.x;
 	} else if (airplane.position.x < offset-xTranslate) {
 		xTranslate -= airplane.velocity.x;
 	}
-	};
+};
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
@@ -39,7 +41,7 @@ var Smoke = function (x,y) { //smoke behind the airplane
 };
 
 Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= 0.7;
+	this.opacity -= 0.6;
 };
 
 Smoke.prototype.display = function () {
@@ -70,9 +72,9 @@ var Airplane = function (x,y) {
 	this.position = new processing.PVector(x,y);
 	this.velocityMag = 2; //magnitude, only in the x-direction
 	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
-	this.angle = 3.14/4; //declination from the X axis in radians
+	this.angle = 0; //declination from the X axis in radians
 	this.acceleration = 0;
-	this.angleMag = 0.05; //magnitude with which the plane will be turning
+	this.angleMag = 0.03; //magnitude with which the plane will be turning
 };
 
 Airplane.prototype.update = function () {
@@ -96,7 +98,8 @@ Airplane.prototype.display = function () {
 	processing.pushMatrix();
 	processing.translate(this.position.x,this.position.y);
 	processing.rotate(this.angle);
-	processing.triangle(0,10,0,-10,30,0);
+	processing.imageMode(processing.CENTER);
+	processing.image(img,0,0,56,26);
 	processing.popMatrix();
 };
 
@@ -108,8 +111,7 @@ Airplane.prototype.run = function () { //gets called in the draw method, handles
 var airplane = new Airplane(200,200);
 
 
-
-processing.draw = function () {
+processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	processing.background(72,208,235);
 	shiftScene(airplane);
 	updateSmokes();
@@ -121,9 +123,11 @@ processing.keyPressed = function () {
 	KEY = processing.keyCode;
 };
 
-processing.keyReleased = function () {
+processing.keyReleased = function () { //Key is reset to 0 when released
 	KEY = 0;
 };
+
+
 }
 var canvas = document.getElementById("canvas1");
 var p = new Processing(canvas, sketchProc);
