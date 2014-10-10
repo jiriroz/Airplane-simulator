@@ -17,17 +17,24 @@ img = processing.loadImage('plane.png'); //169x79px
 var Ring = function (x,y,radius) {
 	this.position = new processing.PVector(x,y);
 	this.radius = radius; //radius in the y-direction
+	this.opacity = 255;
 };
 
 Ring.prototype.display = function () {
 	var s = 5;
 	processing.noFill();
 	processing.strokeWeight(s);
-	processing.stroke(255,0,0);
+	processing.stroke(255,0,0,this.opacity);
 	processing.ellipse(this.position.x,this.position.y,this.radius,this.radius*2);
-	processing.stroke(0,0,0);
+	processing.stroke(0,0,0,this.opacity);
 	processing.strokeWeight(4);
 	processing.line(this.position.x,this.position.y+this.radius+s,this.position.x,CHEIGHT);
+};
+
+Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
+	if (plane.position.x<this.position.x+2 && plane.position.x>this.position.x-2 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
+		return true;
+	}
 };
 
 var controls = function () {
@@ -42,7 +49,7 @@ var shiftScene = function (airplane) { //shifts the scene when the plane gets of
 	processing.stroke(255,0,0);
 	processing.translate(xTranslate,0);
 	//processing.line(800-offset-xTranslate,0,800-offset-xTranslate,600);
-	//sprocessing.line(offset-xTranslate,0,offset-xTranslate,600);
+	//processing.line(offset-xTranslate,0,offset-xTranslate,600);
 	if (airplane.position.x > 800-offset-xTranslate) {
 		xTranslate -= airplane.velocity.x;
 	} else if (airplane.position.x < offset-xTranslate) {
@@ -148,6 +155,9 @@ processing.draw = function () { //what gets called before the shift scene stays 
 	controls();
 	for (var i=0;i<rings.length;i++) {
 		rings[i].display();
+		if (rings[i].checkThrough(airplane)) {
+			rings[i].opacity = 0;
+		}
 	};
 	airplane.run();
 };
