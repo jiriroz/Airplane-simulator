@@ -9,7 +9,7 @@ processing.background(72,208,235);
 var xTranslate = 0; //how much the scene is translated in the x-direction
 var smokes = []; //smoke behind the airplane
 var smokeTime = 0; //last time smoke was deployed
-var offset = 100; //offset for scene shifting
+var sceneOffset = 100; //offset for scene shifting
 var rings = [];
 var grounds = [];
 var groundLevel = 50; //offset of the ground from the bottom
@@ -24,7 +24,7 @@ var Ground = function (xCenter) { //ground function, later will be animated
 
 Ground.prototype.display = function () {
 	processing.noStroke();
-	processing.fill(64,49,23);
+	processing.fill(49,247,49);
 	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
 };
 
@@ -61,20 +61,14 @@ var controls = function () {
 
 var shiftScene = function (airplane) { //shifts the scene when the plane gets offset close to the margin
 	processing.stroke(255,0,0);
+	xTranslate -= airplane.velocity.x;
 	processing.translate(xTranslate,0);
-	//processing.line(800-offset-xTranslate,0,800-offset-xTranslate,600);
-	//processing.line(offset-xTranslate,0,offset-xTranslate,600);
-	if (airplane.position.x > 800-offset-xTranslate) {
-		xTranslate -= airplane.velocity.x;
-	} else if (airplane.position.x < offset-xTranslate) {
-		xTranslate -= airplane.velocity.x;
-	}
 };
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
 	this.opacity = Math.random()*150+50;
-	radius = Math.random()*4+5 //implement standard distribution
+	var radius = Math.random()*4+5; //implement standard distribution
 	this.radius = radius;
 };
 
@@ -108,25 +102,30 @@ var updateSmokes = function () { //function that gets called in the draw method 
 
 var Airplane = function (x,y) {
 	this.position = new processing.PVector(x,y);
-	this.velocityMag = 2; //magnitude, only in the x-direction
+	this.velocityMag = 0; //magnitude, only in the x-direction
 	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
 	this.angle = 0; //declination from the X axis in radians
-	this.acceleration = new processing.PVector(0,0);
+	this.acceleration = 0;
 	this.angleMag = 0.03; //magnitude with which the plane will be turning
+	this.velRange = 1;
+	this.minVel = 3;
 };
 
 Airplane.prototype.update = function () {
 	//updates current position according to current velocity magnitude and angle using trig
-	//this.velocityMag += this.acceleration;
+	this.velocityMag = Math.sin(this.angle)*this.velRange + this.minVel; //velocity is a function of the angle (up-slower,down-faster)
+	this.velocityMag += this.acceleration;
 	this.velocity.x = this.velocityMag * Math.cos(this.angle);
 	this.velocity.y = this.velocityMag * Math.sin(this.angle);
-	this.velocity.add(this.acceleration);
 	this.position.add(this.velocity);
-	this.acceleration.mult(0);
+	this.acceleration = 0;
+	if (this.angle >= 2*Math.PI || this.angle <= -2*Math.PI) {
+		this.angle = 0;
+	}
 };
 
 Airplane.prototype.applyForce = function (force) {
-	this.acceleration.add(force);
+	this.acceleration = force;
 };
 
 Airplane.prototype.turn = function (direction) {
@@ -148,36 +147,53 @@ Airplane.prototype.display = function () {
 };
 
 Airplane.prototype.run = function () { //gets called in the draw method, handles all airplane methods
-	airplane.update();
-	airplane.display();
+	if (this.velocityMag < 3) {
+		this.takeOff();
+	}
+	this.checkUp();
+	this.update();
+	this.display();
+	
 };
 
-var airplane = new Airplane(150,500);
+Airplane.prototype.takeOff = function () {
+	this.applyForce(0.03);
+	this.angle -=0.001;
+};
+
+Airplane.prototype.checkUp = function () { //function that handles when airplane flies off the screen up
+	if (this.position.y < -70) {
+		this.angle *= -1;
+	}
+};
+
+
+var airplane = new Airplane(CWIDTH/2,540);
 var x = 0;
 var y = 0;
 for (var i=0;i<5;i++) {
 	x = Math.random()*760+20;
-	y = Math.random()*520+40;
+	y = Math.random()*500+30;
 	rings.push(new Ring(x,y,30));
 }
 grounds.push(new Ground(400));
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	processing.background(72,208,235);
+	grounds[0].display();
 	shiftScene(airplane);
 	controls();
 	updateSmokes();
-	for (var i=0;i<grounds.length;i++) {
-		grounds[i].display();
-	}
 	
-	if (airplane.position.x > rightMostGround) {
-		grounds.push(new Ground(rightMostGround+800));
+	/*if (airplane.position.x > rightMostGround) { left checking partially not working, because rectangle apparently cant have + and - x coord.
+		grounds.push(new Ground(rightMostGround+800)); zatim to tak nech byt, kdyztak te pak neco napadne. Ted se bude zem posouvat se scenou.
 		rightMostGround += 800;
-	} else if (airplane.position.x < leftMostGround) {
+	}
+	if (airplane.position.x < leftMostGround) {
 		grounds.push(new Ground(leftMostGround-800));
 		leftMostGround -= 800;
-	}
+	}*/
+	
 	
 	for (var i=0;i<rings.length;i++) {
 		rings[i].display();
