@@ -1,18 +1,40 @@
 function sketchProc(processing) {
 /*Simple 2D airplane simulator. Author Jiri Roznovjak*/
 
-var CWIDTH = 800; //canvas width and height
-var CHEIGHT = 600;
+var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
 var SCENE = 1;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
 var groundLevel = 50; //offset of the ground from the bottom
-var leftMostGround = 400; 
-var rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
+var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
 var img = processing.loadImage('plane.png'); //169x79px
-//issue: What happens to the mouse position when I translate the canvas?
+
+var Time = function () { //keeps track of and displays time
+	this.displayTime = 0;
+	this.currentTime = 0;
+	this.x = 0;
+	this.y = 0;
+};
+
+Time.prototype.setup = function (x,y,start) {
+	this.x = x;
+	this.y = y;
+	this.displayTime = start;
+	this.currentTime = processing.millis();
+};
+
+Time.prototype.update = function () {
+	if (processing.millis()-this.currentTime > 1000) {
+		this.currentTime = processing.millis();
+		this.displayTime -= 1;
+	}
+};
+
+Time.prototype.display = function () {
+	processing.text(this.displayTime,this.x,this.y);
+};
 
 var Button = function (x,y,width,height,color,text,textSize) { //x and y are the center of the button
 	this.position = new processing.PVector(x,y);
@@ -22,6 +44,7 @@ var Button = function (x,y,width,height,color,text,textSize) { //x and y are the
 	this.text = text;
 	this.textSize = textSize;
 	this.stroke = 0;
+	this.radius = 0;
 };
 
 Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
@@ -29,8 +52,16 @@ Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and it
 	this.strokeColor = color;
 };
 Button.prototype.setRadius = function (radius) {
+	this.radius = radius;
 };
 Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
+	var right = this.position.x+this.width/2;
+	var left = this.position.x-this.width/2;
+	var up = this.position.y-this.height/2;
+	var down = this.position.y+this.height/2;
+	if (processing.mouseX>left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
+		return true;
+	}
 };
 Button.prototype.display = function () {
 	if (this.stroke === 0) {
@@ -41,11 +72,11 @@ Button.prototype.display = function () {
 	}
 	processing.rectMode(processing.CENTER);
 	processing.fill(this.color);
-	processing.rect(this.position.x,this.position.y,this.width,this.height);
+	processing.rect(this.position.x,this.position.y,this.width,this.height,0);
 	processing.textSize(this.textSize);
 	processing.textAlign(processing.CENTER);
 	processing.fill(0,0,0);
-	processing.text(this.text,this.position.x,this.position.y);
+	processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
 };
 
 var Ground = function (xCenter) { //ground function, later will be animated
@@ -63,6 +94,7 @@ var Ring = function (x,y,radius) {
 	this.position = new processing.PVector(x,y);
 	this.radius = radius; //radius in the y-direction
 	this.opacity = 255;
+	this.angle = 0;
 };
 
 Ring.prototype.display = function () {
@@ -71,15 +103,17 @@ Ring.prototype.display = function () {
 	processing.strokeWeight(s);
 	processing.stroke(255,0,0,this.opacity);
 	processing.ellipse(this.position.x,this.position.y,this.radius,this.radius*2);
-	processing.stroke(0,0,0,this.opacity);
-	processing.strokeWeight(4);
-	processing.line(this.position.x,this.position.y+this.radius+s,this.position.x,CHEIGHT-groundLevel);
 };
 
 Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
 	if (plane.position.x<this.position.x+2 && plane.position.x>this.position.x-2 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
 		return true;
 	}
+};
+
+Ring.prototype.airplaneThrough = function () { //method that handles when the airplane flies through the ring
+	this.position.x += 600;
+	this.position.y += Math.random()*200-100;
 };
 
 var controls = function (airplane) {
@@ -133,7 +167,7 @@ var Airplane = function (x,y) {
 	this.acceleration = 0;
 	this.angleMag = 0.04; //magnitude with which the plane will be turning
 	this.velRange = 1;
-	this.minVel = 3;
+	this.minVel = 4;
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
 	this.smokeTime = 0; //last time smoke was deployed
 };
@@ -210,19 +244,14 @@ var GameScene = function () {
 };
 
 GameScene.prototype.setup = function () {
-	this.aircraft = new Airplane(CWIDTH/2,540);
+	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-groundLevel-10);
 	this.rings = [];
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
-	var x = 100;
-	var y = 0;
-	for (var i=0;i<5;i++) {
-		//x = Math.random()*760+20;
-		y = Math.random()*490+30;
-		this.rings.push(new Ring(x,y,30));
-		x+=100;
-	}
+	this.score = 0;
+	this.rings.push(new Ring(900,200,30));
+	this.rings.push(new Ring(1200,300,30));
 };
 
 GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
@@ -233,7 +262,6 @@ GameScene.prototype.shiftScene = function () { //shifts the scene according to h
 
 GameScene.prototype.run = function () {
 	processing.background(72,208,235);
-	testButt.display();
 	this.grounds[0].display();
 	this.shiftScene(this.aircraft);
 	controls(this.aircraft);
@@ -241,7 +269,8 @@ GameScene.prototype.run = function () {
 	for (var i=0;i<this.rings.length;i++) {
 		this.rings[i].display();
 		if (this.rings[i].checkThrough(this.aircraft)) {
-			this.rings[i].opacity = 0;
+			this.rings[i].airplaneThrough();
+			this.score += 1;
 		}
 	};
 	this.aircraft.run();
@@ -264,8 +293,7 @@ var pause = function () {
 	processing.text('Pause',230,280);
 };
 
-var testButt = new Button (100,100,100,60,processing.color(50,100,200),"Test",20);
-testButt.setStroke(10,processing.color(80,150,70));
+
 var mainScene = new GameScene();
 mainScene.setup();
 
