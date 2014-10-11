@@ -4,17 +4,49 @@ function sketchProc(processing) {
 var CWIDTH = 800; //canvas width and height
 var CHEIGHT = 600;
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 0;
+var SCENE = 1;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
-var xTranslate = 0; //how much the scene is translated in the x-direction
-var smokeTime = 0; //last time smoke was deployed
 var sceneOffset = 100; //offset for scene shifting
 var groundLevel = 50; //offset of the ground from the bottom
 var leftMostGround = 400; 
 var rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
+var img = processing.loadImage('plane.png'); //169x79px
+//issue: What happens to the mouse position when I translate the canvas?
 
-img = processing.loadImage('plane.png'); //169x79px
+var Button = function (x,y,width,height,color,text,textSize) { //x and y are the center of the button
+	this.position = new processing.PVector(x,y);
+	this.width = width;
+	this.height = height;
+	this.color = color;
+	this.text = text;
+	this.textSize = textSize;
+	this.stroke = 0;
+};
+
+Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
+	this.stroke = stroke;
+	this.strokeColor = color;
+};
+Button.prototype.setRadius = function (radius) {
+};
+Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
+};
+Button.prototype.display = function () {
+	if (this.stroke === 0) {
+		processing.noStroke();
+	} else {
+		processing.stroke(this.strokeColor);
+		processing.strokeWeight(this.stroke);
+	}
+	processing.rectMode(processing.CENTER);
+	processing.fill(this.color);
+	processing.rect(this.position.x,this.position.y,this.width,this.height);
+	processing.textSize(this.textSize);
+	processing.textAlign(processing.CENTER);
+	processing.fill(0,0,0);
+	processing.text(this.text,this.position.x,this.position.y);
+};
 
 var Ground = function (xCenter) { //ground function, later will be animated
 	this.xCenter = xCenter;
@@ -23,6 +55,7 @@ var Ground = function (xCenter) { //ground function, later will be animated
 Ground.prototype.display = function () {
 	processing.noStroke();
 	processing.fill(131,247,73);
+	processing.rectMode(processing.CORNER);
 	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
 };
 
@@ -57,12 +90,6 @@ var controls = function (airplane) {
 	}
 };
 
-var shiftScene = function (airplane) { //shifts the scene when the plane gets offset close to the margin
-	processing.stroke(255,0,0);
-	xTranslate -= airplane.velocity.x;
-	processing.translate(xTranslate,0);
-};
-
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
 	this.opacity = Math.random()*150+50;
@@ -82,8 +109,8 @@ Smoke.prototype.display = function () {
 };
 
 var updateSmokes = function (smokes,airplane) { //function that gets called in the draw method and handles all the smoke stuff
-	if (processing.millis() - smokeTime > 200) {
-		smokeTime = processing.millis();
+	if (processing.millis() - airplane.smokeTime > 200) {
+		airplane.smokeTime = processing.millis();
 		smokes.push(new Smoke(airplane.position.x,airplane.position.y));
 	}
 	for (var i=0;i<smokes.length;i++) {
@@ -105,9 +132,10 @@ var Airplane = function (x,y) {
 	this.angle = 0; //declination from the X axis in radians
 	this.acceleration = 0;
 	this.angleMag = 0.04; //magnitude with which the plane will be turning
-	this.velRange = 0.8;
+	this.velRange = 1;
 	this.minVel = 3;
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
+	this.smokeTime = 0; //last time smoke was deployed
 };
 
 Airplane.prototype.update = function () {
@@ -186,20 +214,28 @@ GameScene.prototype.setup = function () {
 	this.rings = [];
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
+	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	var x = 100;
 	var y = 0;
 	for (var i=0;i<5;i++) {
 		//x = Math.random()*760+20;
-		y = Math.random()*500+30;
+		y = Math.random()*490+30;
 		this.rings.push(new Ring(x,y,30));
 		x+=100;
 	}
 };
 
+GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
+	processing.stroke(255,0,0);
+	this.xTranslate -= this.aircraft.velocity.x;
+	processing.translate(this.xTranslate,0);
+};
+
 GameScene.prototype.run = function () {
 	processing.background(72,208,235);
+	testButt.display();
 	this.grounds[0].display();
-	shiftScene(this.aircraft);
+	this.shiftScene(this.aircraft);
 	controls(this.aircraft);
 	updateSmokes(this.smokes,this.aircraft);
 	for (var i=0;i<this.rings.length;i++) {
@@ -211,36 +247,54 @@ GameScene.prototype.run = function () {
 	this.aircraft.run();
 };
 
-var scene0 = function () {
+var initialScene = function () {
 	processing.background(72,208,235);
 	processing.fill(255,255,255);
 	processing.textSize(50);
 	processing.text('Initial Scene',230,280);
 };
 
-var newscene = new GameScene();
+var pause = function () {
+	processing.noStroke();
+	processing.fill(150,150,150,100);
+	processing.rectMode(processing.CORNER);
+	processing.rect(0,0,CWIDTH,CHEIGHT);
+	processing.fill(255,255,255);
+	processing.textSize(50);
+	processing.text('Pause',230,280);
+};
+
+var testButt = new Button (100,100,100,60,processing.color(50,100,200),"Test",20);
+testButt.setStroke(10,processing.color(80,150,70));
+var mainScene = new GameScene();
+mainScene.setup();
+
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
-	switch(SCENE) {
-		case 0:
-			scene0();
-			break;
-		case 1:
-			newscene.run();
-			break;
+	if (SCENE === 0) {
+		initialScene();
+	}
+	else if (SCENE === 1) {
+		mainScene.run();
+	}
+	else if (SCENE < 0) {
+		//pause, does nothing, pause function invoked in the processing.keypressed method
 	}
 };
 
 processing.mouseClicked = function () {
 	if (SCENE===0) {
-		newscene.setup();
 		SCENE=1;
 	} else if (SCENE===1) {
-		SCENE=0;
+		//SCENE=0;
 	}
 };
 
 processing.keyPressed = function () {
 	KEY = processing.keyCode;
+	if (KEY === 80) {
+		SCENE *= -1;
+		pause();
+	}
 };
 
 processing.keyReleased = function () { //Key is reset to 0 when released
