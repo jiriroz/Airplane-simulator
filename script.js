@@ -33,7 +33,15 @@ Time.prototype.update = function () {
 };
 
 Time.prototype.display = function () {
+	processing.textSize(12);
+	processing.fill(0,0,0);
+	processing.textAlign(processing.CENTER);
 	processing.text(this.displayTime,this.x,this.y);
+};
+
+Time.prototype.run = function () {
+	this.update();
+	this.display();
 };
 
 var Button = function (x,y,width,height,color,text,textSize) { //x and y are the center of the button
@@ -90,10 +98,10 @@ Ground.prototype.display = function () {
 	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
 };
 
-var Ring = function (x,y,radius) {
+var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, can have values 1 or 0
 	this.position = new processing.PVector(x,y);
 	this.radius = radius; //radius in the y-direction
-	this.opacity = 255;
+	this.opacity = 255*visible;
 	this.angle = 0;
 };
 
@@ -114,15 +122,12 @@ Ring.prototype.checkThrough = function (plane) { //returns true if airplane is i
 Ring.prototype.airplaneThrough = function () { //method that handles when the airplane flies through the ring
 	this.position.x += 600;
 	this.position.y += Math.random()*200-100;
+	this.opacity = 0;
 };
 
-var controls = function (airplane) {
-	if (KEY === 37 || KEY === 38) {
-		airplane.turn(-1);
-	} else if (KEY === 39 || KEY === 40) {
-		airplane.turn(1);
-	}
-};
+Ring.prototype.show = function () { //ring is shown after the previous ring is flown through
+	this.opacity = 255;
+}
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
@@ -166,7 +171,7 @@ var Airplane = function (x,y) {
 	this.angle = 0; //declination from the X axis in radians
 	this.acceleration = 0;
 	this.angleMag = 0.04; //magnitude with which the plane will be turning
-	this.velRange = 1;
+	this.velRange = 0.7;
 	this.minVel = 4;
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
 	this.smokeTime = 0; //last time smoke was deployed
@@ -240,6 +245,15 @@ Airplane.prototype.crash = function () { //crashes the airplane (needs further i
 	this.isFlying = 0;
 };
 
+Airplane.prototype.controls = function () {
+	if (KEY === 37 || KEY === 38) {
+		this.turn(-1);
+	} else if (KEY === 39 || KEY === 40) {
+		this.turn(1);
+	}
+};
+
+
 var GameScene = function () {
 };
 
@@ -250,8 +264,8 @@ GameScene.prototype.setup = function () {
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
-	this.rings.push(new Ring(900,200,30));
-	this.rings.push(new Ring(1200,300,30));
+	this.rings.push(new Ring(900,200,30,1));
+	this.rings.push(new Ring(1200,300,30,0));
 };
 
 GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
@@ -263,17 +277,34 @@ GameScene.prototype.shiftScene = function () { //shifts the scene according to h
 GameScene.prototype.run = function () {
 	processing.background(72,208,235);
 	this.grounds[0].display();
+	processing.fill(0,0,0);
+	time.run();
 	this.shiftScene(this.aircraft);
-	controls(this.aircraft);
+	this.aircraft.controls();
 	updateSmokes(this.smokes,this.aircraft);
-	for (var i=0;i<this.rings.length;i++) {
+	this.rings[0].display();
+	this.rings[1].display();
+	if (this.rings[0].checkThrough(this.aircraft)) {
+		this.rings[0].airplaneThrough();
+		this.rings[1].show();
+			this.score += 1;
+	}
+	if (this.rings[1].checkThrough(this.aircraft)) {
+		this.rings[1].airplaneThrough();
+		this.rings[0].show();
+			this.score += 1;
+	}
+	/*for (var i=0;i<this.rings.length;i++) {
 		this.rings[i].display();
 		if (this.rings[i].checkThrough(this.aircraft)) {
 			this.rings[i].airplaneThrough();
 			this.score += 1;
 		}
-	};
+	};*/
 	this.aircraft.run();
+	if (time.displayTime === 0) {
+		SCENE = 1.5;
+	}
 };
 
 var initialScene = function () {
@@ -293,9 +324,30 @@ var pause = function () {
 	processing.text('Pause',230,280);
 };
 
+var TimeOut = function () {
+	this.displayed = false;
+};
+
+TimeOut.prototype.display = function (score) {
+	this.displayed = true;
+	processing.noStroke();
+	processing.fill(150,150,150,100);
+	processing.rectMode(processing.CORNER);
+	processing.rect(0,0,CWIDTH,CHEIGHT);
+	processing.textSize(40);
+	processing.fill(0,0,0);
+	processing.text("Time Out!",300,200);
+	processing.textSize(20);
+	processing.text("Final Score:",300,250);
+	processing.text(score,400,250);
+};
 
 var mainScene = new GameScene();
+var time = new Time();
+var timeOut = new TimeOut();
 mainScene.setup();
+time.setup(700,100,20);
+
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	if (SCENE === 0) {
@@ -303,6 +355,11 @@ processing.draw = function () { //what gets called before the shift scene stays 
 	}
 	else if (SCENE === 1) {
 		mainScene.run();
+	}
+	else if (SCENE === 1.5) {
+		if (timeOut.displayed === false) {
+			timeOut.display(mainScene.score);
+		}
 	}
 	else if (SCENE < 0) {
 		//pause, does nothing, pause function invoked in the processing.keypressed method
@@ -314,6 +371,11 @@ processing.mouseClicked = function () {
 		SCENE=1;
 	} else if (SCENE===1) {
 		//SCENE=0;
+	} else if (SCENE===1.5) {
+		SCENE=1;
+		mainScene.setup();
+		timeOut.displayed = false;
+		time.setup(700,100,20);
 	}
 };
 
