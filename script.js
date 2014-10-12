@@ -3,7 +3,7 @@ function sketchProc(processing) {
 
 var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 1;
+var SCENE = 0;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
@@ -44,15 +44,18 @@ Time.prototype.run = function () {
 	this.display();
 };
 
-var Button = function (x,y,width,height,color,text,textSize) { //x and y are the center of the button
+var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
 	this.position = new processing.PVector(x,y);
 	this.width = width;
 	this.height = height;
 	this.color = color;
+	this.opacity = opacity;
 	this.text = text;
 	this.textSize = textSize;
 	this.stroke = 0;
 	this.radius = 0;
+	this.hover = false;
+	this.hoverHighlight = 0;
 };
 
 Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
@@ -62,6 +65,11 @@ Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and it
 Button.prototype.setRadius = function (radius) {
 	this.radius = radius;
 };
+
+Button.prototype.setOpacity = function (opacity) {
+	this.opacity = opacity;
+};
+
 Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
 	var right = this.position.x+this.width/2;
 	var left = this.position.x-this.width/2;
@@ -79,12 +87,17 @@ Button.prototype.display = function () {
 		processing.strokeWeight(this.stroke);
 	}
 	processing.rectMode(processing.CENTER);
-	processing.fill(this.color);
-	processing.rect(this.position.x,this.position.y,this.width,this.height,0);
+	if (this.hover) {
+		processing.fill(this.color,this.opacity+this.hoverHighlight);
+	} else {
+		processing.fill(this.color,this.opacity);
+	}
+	processing.rect(this.position.x,this.position.y,this.width,this.height,this.radius);
 	processing.textSize(this.textSize);
 	processing.textAlign(processing.CENTER);
 	processing.fill(0,0,0);
 	processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
+	this.hover = false;
 };
 
 var Ground = function (xCenter) { //ground function, later will be animated
@@ -106,21 +119,29 @@ var Ring = function (x,y,radius) { //visible determines whether the ring is visi
 };
 
 Ring.prototype.display = function () {
-	var s = 5;
 	processing.noFill();
-	processing.strokeWeight(s);
+	processing.strokeWeight(5);
 	processing.stroke(255,0,0,this.opacity);
-	processing.ellipse(this.position.x,this.position.y,this.radius,this.radius*2);
+	processing.pushMatrix();
+	processing.translate(this.position.x,this.position.y);
+	processing.rotate(this.angle);
+	processing.ellipse(0,0,this.radius,this.radius*2);
+	processing.popMatrix();
 };
 
 Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
-	if (plane.position.x<this.position.x+2 && plane.position.x>this.position.x-2 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
+	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
 		return true;
 	}
 };
 
-Ring.prototype.airplaneThrough = function (nextRing) { //method that handles when the airplane flies through the ring
-	this.position.x += 600;
+Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that handles when the airplane flies through the ring
+	if (Math.random() < probability) {
+		var xshift = Math.random()*300+100;
+	} else {
+		var xshift = Math.random()*200*(-1)-50;
+	}
+	this.position.x = nextRing.position.x + xshift;
 	this.position.y = Math.random()*(CHEIGHT-200)+groundLevel+50;
 };
 
@@ -165,9 +186,9 @@ var Airplane = function (x,y) {
 	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
 	this.angle = 0; //declination from the X axis in radians
 	this.acceleration = 0;
-	this.angleMag = 0.04; //magnitude with which the plane will be turning
-	this.velRange = 0.7;
-	this.minVel = 4;
+	this.angleMag = 0.05; //magnitude with which the plane will be turning
+	this.velRange = 1;
+	this.minVel = 5;
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
 	this.smokeTime = 0; //last time smoke was deployed
 };
@@ -225,7 +246,7 @@ Airplane.prototype.takeOff = function () {
 };
 
 Airplane.prototype.checkUp = function () { //function that handles when airplane flies off the screen up
-	if (this.position.y < -70) {
+	if (this.position.y < -100) {
 		this.angle *= -1;
 	}
 };
@@ -248,7 +269,6 @@ Airplane.prototype.controls = function () {
 	}
 };
 
-
 var GameScene = function () {
 };
 
@@ -259,8 +279,9 @@ GameScene.prototype.setup = function () {
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
-	this.rings.push(new Ring(900,200,30,1));
-	this.rings.push(new Ring(1200,300,30,1));
+	this.probability = 0.75; //probability that a new ring will appear forward of the airplane
+	this.rings.push(new Ring(900,200,30));
+	this.rings.push(new Ring(1200,300,30));
 	this.activeRing = 0;
 };
 
@@ -280,8 +301,8 @@ GameScene.prototype.run = function () {
 	updateSmokes(this.smokes,this.aircraft);
 	this.rings[this.activeRing].display();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		if (this.activeRing===0) {var nonActiveRing = 1;} else if (this.activeRing===1) {var nonActiveRing = 0;}
-		this.rings[this.activeRing].airplaneThrough(this.rings[nonActiveRing]);
+		var nonActiveRing = Math.abs(Math.pow(2,this.activeRing)-2); //opposite value of the active ring
+		this.rings[this.activeRing].airplaneThrough(this.rings[nonActiveRing],this.probability);
 		this.activeRing = nonActiveRing;
 		this.score += 1;
 	}
@@ -291,14 +312,33 @@ GameScene.prototype.run = function () {
 	}
 };
 
-var initialScene = function () {
-	processing.background(72,208,235);
-	processing.fill(255,255,255);
-	processing.textSize(50);
-	processing.text('Initial Scene',230,280);
+var InitialScene = function () { //innital screen, scene number = 0
+	this.title = new Button(400,200,400,100,processing.color(245,65,65),"Flight Aerobatics",50,100);
+	this.title.setRadius(10);
+	this.newGame = new Button(400,300,200,50,processing.color(245,65,65),"New game",30,70);
+	this.newGame.setRadius(5);
+	this.newGame.hoverHighlight = 20;
 };
 
-var pause = function () {
+InitialScene.prototype.run = function () {
+	processing.background(72,208,235);
+	this.title.display();
+	if (this.newGame.checkMouse()) { //hover above the newgame button
+		this.newGame.hover = true;
+	}
+	this.newGame.display();
+	processing.textSize(20);
+	processing.textAlign(processing.CENTER);
+	processing.text("Jiri Roznovjak",400,550);
+};
+
+InitialScene.prototype.checkNewGame = function () { //checks if the mouse is located above the newgame
+	if (this.newGame.checkMouse()) {
+		return true;
+	}
+};
+
+var pause = function () { //invoked after pressing P, scene num = 1.5 (later maybe change)
 	processing.noStroke();
 	processing.fill(150,150,150,100);
 	processing.rectMode(processing.CORNER);
@@ -326,16 +366,17 @@ TimeOut.prototype.display = function (score) {
 	processing.text(score,400,250);
 };
 
+var initialScene = new InitialScene();
 var mainScene = new GameScene();
 var time = new Time();
 var timeOut = new TimeOut();
 mainScene.setup();
-time.setup(700,100,20);
+time.setup(700,100,30);
 
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	if (SCENE === 0) {
-		initialScene();
+		initialScene.run();
 	}
 	else if (SCENE === 1) {
 		mainScene.run();
@@ -352,22 +393,33 @@ processing.draw = function () { //what gets called before the shift scene stays 
 
 processing.mouseClicked = function () {
 	if (SCENE===0) {
-		SCENE=1;
+		if (initialScene.checkNewGame()) {
+			SCENE=1;
+		}
 	} else if (SCENE===1) {
 		//SCENE=0;
 	} else if (SCENE===1.5) {
 		SCENE=1;
 		mainScene.setup();
 		timeOut.displayed = false;
-		time.setup(700,100,20);
+		time.setup(700,100,30);
 	}
 };
 
 processing.keyPressed = function () {
 	KEY = processing.keyCode;
-	if (KEY === 80) {
+	if (KEY === 73) { //I
+		SCENE = 0;
+	}
+	if (KEY === 80) { //P
 		SCENE *= -1;
 		pause();
+	}
+	if (KEY === 82) { //R
+		SCENE=1;
+		mainScene.setup();
+		timeOut.displayed = false;
+		time.setup(700,100,30);
 	}
 };
 
