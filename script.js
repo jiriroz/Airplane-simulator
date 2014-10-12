@@ -98,10 +98,10 @@ Ground.prototype.display = function () {
 	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
 };
 
-var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, can have values 1 or 0
+var Ring = function (x,y,radius) { //visible determines whether the ring is visible at first, can have values 1 or 0
 	this.position = new processing.PVector(x,y);
 	this.radius = radius; //radius in the y-direction
-	this.opacity = 255*visible;
+	this.opacity = 255;
 	this.angle = 0;
 };
 
@@ -119,15 +119,10 @@ Ring.prototype.checkThrough = function (plane) { //returns true if airplane is i
 	}
 };
 
-Ring.prototype.airplaneThrough = function () { //method that handles when the airplane flies through the ring
+Ring.prototype.airplaneThrough = function (nextRing) { //method that handles when the airplane flies through the ring
 	this.position.x += 600;
-	this.position.y += Math.random()*200-100;
-	this.opacity = 0;
+	this.position.y = Math.random()*(CHEIGHT-200)+groundLevel+50;
 };
-
-Ring.prototype.show = function () { //ring is shown after the previous ring is flown through
-	this.opacity = 255;
-}
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
@@ -265,7 +260,8 @@ GameScene.prototype.setup = function () {
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
 	this.rings.push(new Ring(900,200,30,1));
-	this.rings.push(new Ring(1200,300,30,0));
+	this.rings.push(new Ring(1200,300,30,1));
+	this.activeRing = 0;
 };
 
 GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
@@ -282,25 +278,13 @@ GameScene.prototype.run = function () {
 	this.shiftScene(this.aircraft);
 	this.aircraft.controls();
 	updateSmokes(this.smokes,this.aircraft);
-	this.rings[0].display();
-	this.rings[1].display();
-	if (this.rings[0].checkThrough(this.aircraft)) {
-		this.rings[0].airplaneThrough();
-		this.rings[1].show();
-			this.score += 1;
+	this.rings[this.activeRing].display();
+	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
+		if (this.activeRing===0) {var nonActiveRing = 1;} else if (this.activeRing===1) {var nonActiveRing = 0;}
+		this.rings[this.activeRing].airplaneThrough(this.rings[nonActiveRing]);
+		this.activeRing = nonActiveRing;
+		this.score += 1;
 	}
-	if (this.rings[1].checkThrough(this.aircraft)) {
-		this.rings[1].airplaneThrough();
-		this.rings[0].show();
-			this.score += 1;
-	}
-	/*for (var i=0;i<this.rings.length;i++) {
-		this.rings[i].display();
-		if (this.rings[i].checkThrough(this.aircraft)) {
-			this.rings[i].airplaneThrough();
-			this.score += 1;
-		}
-	};*/
 	this.aircraft.run();
 	if (time.displayTime === 0) {
 		SCENE = 1.5;
