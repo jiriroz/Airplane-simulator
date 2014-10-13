@@ -10,6 +10,8 @@ var sceneOffset = 100; //offset for scene shifting
 var groundLevel = 50; //offset of the ground from the bottom
 var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
 var cloudOffset = 300; //distance between two clouds in the x-direction
+var smokeOffset = 80; //time in milliseconds between airplane releases two smokes
+var smokeOpacityDecrase = 0.7; //amount by which the opacity of the smoke decrease
 var planeImg = processing.loadImage('plane.png'); //169x79px
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
 var cloud2img = processing.loadImage('cloud2.png'); //164x82
@@ -40,7 +42,7 @@ Time.prototype.update = function () {
 };
 
 Time.prototype.display = function () {
-	processing.textSize(12);
+	processing.textSize(20);
 	processing.fill(0,0,0);
 	processing.textAlign(processing.CENTER);
 	processing.text(this.displayTime,this.x,this.y);
@@ -154,37 +156,20 @@ Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
-	this.opacity = Math.random()*150+50;
-	var radius = Math.random()*4+5; //implement standard distribution
+	this.opacity = Math.random()*60+50;
+	var radius = Math.random()*2+5; //implement standard distribution
 	this.radius = radius;
 };
 
 Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= 0.3;
+	this.opacity -= smokeOpacityDecrase;
 };
 
 Smoke.prototype.display = function () {
 	processing.noStroke();
-	col = processing.color(155,155,155,this.opacity);
+	var col = processing.color(140,140,140,this.opacity);
 	processing.fill(col);
 	processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
-};
-
-var updateSmokes = function (smokes,airplane) { //function that gets called in the draw method and handles all the smoke stuff
-	if (processing.millis() - airplane.smokeTime > 200) {
-		airplane.smokeTime = processing.millis();
-		smokes.push(new Smoke(airplane.position.x,airplane.position.y));
-	}
-	for (var i=0;i<smokes.length;i++) {
-		smokes[i].update();
-		smokes[i].display();
-		if (smokes[i].opacity < 0) { //deletes the smoke that is no longer visible.
-			smokes.splice(i,1);
-			if (i != smokes.length-1) {
-				i--;
-			}
-		}
-	}
 };
 
 var Cloud = function (img,w,h) {
@@ -323,7 +308,7 @@ GameScene.prototype.run = function () {
 	this.shiftScene(this.aircraft);
 	this.shiftScene(this.aircraft);
 	this.aircraft.controls();
-	updateSmokes(this.smokes,this.aircraft);
+	this.updateSmokes();
 	this.rings[this.activeRing].display();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
 		var nonActiveRing = Math.abs(Math.pow(2,this.activeRing)-2); //opposite value of the active ring
@@ -372,6 +357,23 @@ GameScene.prototype.checkClouds = function () { //checks if a cloud needs to be 
 	}
 	if (this.aircraft.position.x-this.clouds[0][0]<600) {
 		this.addCloud(this.clouds[0][0]-cloudOffset);
+	}
+};
+
+GameScene.prototype.updateSmokes = function () { //function that gets called in the draw method and handles all the smoke stuff
+	if (processing.millis() - this.aircraft.smokeTime > smokeOffset) {
+		this.aircraft.smokeTime = processing.millis();
+		this.smokes.push(new Smoke(this.aircraft.position.x,this.aircraft.position.y));
+	}
+	for (var i=0;i<this.smokes.length;i++) {
+		this.smokes[i].update();
+		this.smokes[i].display();
+		if (this.smokes[i].opacity < 0) { //deletes the smoke that is no longer visible.
+			this.smokes.splice(i,1);
+			if (i != this.smokes.length-1) {
+				i--;
+			}
+		}
 	}
 };
 
@@ -440,7 +442,7 @@ var initialScene = new InitialScene();
 var mainScene = new GameScene();
 var timeOut = new TimeOut();
 mainScene.setup();
-time.setup(700,100,30);
+time.setup(750,40,30);
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	if (SCENE === 0) {
@@ -470,7 +472,7 @@ processing.mouseClicked = function () {
 		SCENE=1;
 		mainScene.setup();
 		timeOut.displayed = false;
-		time.setup(700,100,30);
+		time.setup(750,40,30);
 	}
 };
 
@@ -487,7 +489,7 @@ processing.keyPressed = function () {
 		SCENE=1;
 		mainScene.setup();
 		timeOut.displayed = false;
-		time.setup(700,100,30);
+		time.setup(750,40,30);
 	}
 };
 
