@@ -9,6 +9,7 @@ processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
 var groundLevel = 50; //offset of the ground from the bottom
 var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
+var cloudOffset = 300; //distance between two clouds in the x-direction
 var planeImg = processing.loadImage('plane.png'); //169x79px
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
 var cloud2img = processing.loadImage('cloud2.png'); //164x82
@@ -334,28 +335,43 @@ GameScene.prototype.run = function () {
 	if (time.displayTime === 0) {
 		SCENE = 1.5;
 	}
+	this.checkClouds();
 };
 
 GameScene.prototype.generateClouds = function () {
 	var x = 100;
-	for (var i = 0; i < 8; i++) {
+	for (var i = 0; i < 4; i++) {
 		this.addCloud(x);
-		x += 200;
+		x += cloudOffset;
 	}
 };
 
 GameScene.prototype.addCloud = function (x) {
-	var cloud = []
+	var cloud = [];
 	cloud.push(x);
-	cloud.push(100);
+	var y = Math.random()*100+70;
+	cloud.push(y);
 	index = Math.floor(Math.random()*4);
 	cloud.push(index);
-	this.clouds.push(cloud);
+	if (x>0) {
+		this.clouds.push(cloud);
+	} else {
+		this.clouds.splice(0,0,cloud);
+	}
 };
 
 GameScene.prototype.displayClouds = function () {
 	for (var i = 0; i < this.clouds.length; i++) {
 		clouds[this.clouds[i][2]].display(this.clouds[i][0],this.clouds[i][1]);
+	}
+};
+
+GameScene.prototype.checkClouds = function () { //checks if a cloud needs to be added and adds one if necessary
+	if (this.clouds[this.clouds.length-1][0]-this.aircraft.position.x < 600) {
+		this.addCloud(this.clouds[this.clouds.length-1][0]+cloudOffset);
+	}
+	if (this.aircraft.position.x-this.clouds[0][0]<600) {
+		this.addCloud(this.clouds[0][0]-cloudOffset);
 	}
 };
 
