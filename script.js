@@ -3,13 +3,19 @@ function sketchProc(processing) {
 
 var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 0;
+var SCENE = 1;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
 var groundLevel = 50; //offset of the ground from the bottom
 var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
-var img = processing.loadImage('plane.png'); //169x79px
+var planeImg = processing.loadImage('plane.png'); //169x79px
+var cloud1img = processing.loadImage('cloud1.png'); //214x108
+var cloud2img = processing.loadImage('cloud2.png'); //164x82
+var cloud3img = processing.loadImage('cloud3.png'); //223x105
+var cloud4img = processing.loadImage('cloud4.png'); //222x116
+var cloud5img = processing.loadImage('cloud5.png'); //244x128
+
 
 var Time = function () { //keeps track of and displays time
 	this.displayTime = 0;
@@ -180,6 +186,17 @@ var updateSmokes = function (smokes,airplane) { //function that gets called in t
 	}
 };
 
+var Cloud = function (img,w,h) {
+	this.image = img;
+	this.height = h;
+	this.width = w;
+};
+
+Cloud.prototype.display = function (x,y) {
+	processing.imageMode(processing.CENTER);
+	processing.image(this.image,x,y,this.width,this.height);
+};
+
 var Airplane = function (x,y) {
 	this.position = new processing.PVector(x,y);
 	this.velocityMag = 0; //magnitude, only in the x-direction
@@ -225,7 +242,7 @@ Airplane.prototype.display = function () {
 	processing.translate(this.position.x,this.position.y);
 	processing.rotate(this.angle);
 	processing.imageMode(processing.CENTER);
-	processing.image(img,0,0,56,26);
+	processing.image(planeImg,0,0,56,26);
 	processing.popMatrix();
 };
 
@@ -273,6 +290,7 @@ var GameScene = function () {
 };
 
 GameScene.prototype.setup = function () {
+	time = new Time(); //defined as global
 	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-groundLevel-10);
 	this.rings = [];
 	this.grounds = [new Ground(400)];
@@ -283,12 +301,15 @@ GameScene.prototype.setup = function () {
 	this.rings.push(new Ring(900,200,30));
 	this.rings.push(new Ring(1200,300,30));
 	this.activeRing = 0;
+	this.clouds = []; //coordinates and types of clouds
+	this.generateClouds();
+	
 };
 
 GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
 	processing.stroke(255,0,0);
 	this.xTranslate -= this.aircraft.velocity.x;
-	processing.translate(this.xTranslate,0);
+	processing.translate(this.xTranslate/9,0);
 };
 
 GameScene.prototype.run = function () {
@@ -296,6 +317,9 @@ GameScene.prototype.run = function () {
 	this.grounds[0].display();
 	processing.fill(0,0,0);
 	time.run();
+	this.shiftScene(this.aircraft); //shifts the scene by third and between two shifts clouds are displayed
+	this.displayClouds();
+	this.shiftScene(this.aircraft);
 	this.shiftScene(this.aircraft);
 	this.aircraft.controls();
 	updateSmokes(this.smokes,this.aircraft);
@@ -312,10 +336,33 @@ GameScene.prototype.run = function () {
 	}
 };
 
+GameScene.prototype.generateClouds = function () {
+	var x = 100;
+	for (var i = 0; i < 8; i++) {
+		this.addCloud(x);
+		x += 200;
+	}
+};
+
+GameScene.prototype.addCloud = function (x) {
+	var cloud = []
+	cloud.push(x);
+	cloud.push(100);
+	index = Math.floor(Math.random()*4);
+	cloud.push(index);
+	this.clouds.push(cloud);
+};
+
+GameScene.prototype.displayClouds = function () {
+	for (var i = 0; i < this.clouds.length; i++) {
+		clouds[this.clouds[i][2]].display(this.clouds[i][0],this.clouds[i][1]);
+	}
+};
+
 var InitialScene = function () { //innital screen, scene number = 0
-	this.title = new Button(400,200,400,100,processing.color(245,65,65),"Flight Aerobatics",50,100);
+	this.title = new Button(400,200,400,100,processing.color(0,0,255),"Flight Aerobatics",50,100);
 	this.title.setRadius(10);
-	this.newGame = new Button(400,300,200,50,processing.color(245,65,65),"New game",30,70);
+	this.newGame = new Button(400,300,200,50,processing.color(0,0,255),"New game",30,70);
 	this.newGame.setRadius(5);
 	this.newGame.hoverHighlight = 20;
 };
@@ -366,13 +413,18 @@ TimeOut.prototype.display = function (score) {
 	processing.text(score,400,250);
 };
 
+var clouds = [];
+clouds.push(new Cloud(cloud1img,214,108));
+clouds.push(new Cloud(cloud2img,165,82));
+clouds.push(new Cloud(cloud3img,223,105));
+clouds.push(new Cloud(cloud4img,222,116));
+clouds.push(new Cloud(cloud5img,244,128));
+
 var initialScene = new InitialScene();
 var mainScene = new GameScene();
-var time = new Time();
 var timeOut = new TimeOut();
 mainScene.setup();
 time.setup(700,100,30);
-
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
 	if (SCENE === 0) {
