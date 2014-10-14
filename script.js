@@ -20,6 +20,8 @@ var cloud4img = processing.loadImage('cloud4.png'); //222x116
 var cloud5img = processing.loadImage('cloud5.png'); //244x128
 var clickX = 700;
 var clickY = 300;
+var clouds = [];
+var initialScene, mainScene, timeOut, pause;
 
 
 var Time = function () { //keeps track of and displays time
@@ -410,6 +412,7 @@ InitialScene.prototype = Object.create(GameScene.prototype);
 
 InitialScene.prototype.run = function () {
 	processing.background(72,208,235);
+	this.displayClouds();
 	this.title.display();
 	if (this.newGame.checkMouse()) { //hover above the newgame button
 		this.newGame.hover = true;
@@ -429,14 +432,28 @@ InitialScene.prototype.checkNewGame = function () { //checks if the mouse is loc
 	}
 };
 
-var pause = function () { //invoked after pressing P, scene num = 1.5 (later maybe change)
+InitialScene.prototype.displayClouds = function () {
+	clouds[0].display(130,100);
+	clouds[1].display(650,100);
+	clouds[2].display(400,80);
+	clouds[3].display(170,380);
+	clouds[4].display(600,400);
+};
+
+var Pause = function () { //invoked after pressing P
+	this.returnToMM = new Button(400,320,200,50,processing.color(100,100,100),'Return to Main Menu',20,40);
+	this.returnToMM.setRadius(5);
+};
+
+Pause.prototype.display = function () {
 	processing.noStroke();
 	processing.fill(150,150,150,100);
 	processing.rectMode(processing.CORNER);
 	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.fill(255,255,255);
-	processing.textSize(50);
-	processing.text('Pause',230,280);
+	processing.fill(0,0,0);
+	processing.textSize(80);
+	processing.text('Pause',400,250);
+	this.returnToMM.display();
 };
 
 var TimeOut = function () {
@@ -457,16 +474,17 @@ TimeOut.prototype.display = function (score) {
 	processing.text(score,400,250);
 };
 
-var clouds = [];
+
 clouds.push(new Cloud(cloud1img,214,108));
 clouds.push(new Cloud(cloud2img,165,82));
 clouds.push(new Cloud(cloud3img,223,105));
 clouds.push(new Cloud(cloud4img,222,116));
 clouds.push(new Cloud(cloud5img,244,128));
 
-var initialScene = new InitialScene();
-var mainScene = new GameScene();
-var timeOut = new TimeOut();
+initialScene = new InitialScene();
+mainScene = new GameScene();
+timeOut = new TimeOut();
+pause = new Pause();
 mainScene.setup();
 time.setup(750,40,30);
 
@@ -501,6 +519,10 @@ processing.mouseClicked = function () {
 		mainScene.setup();
 		timeOut.displayed = false;
 		time.setup(750,40,30);
+	} else if (SCENE<0) {
+		if (pause.returnToMM.checkMouse()) {
+			SCENE = 0;
+		}
 	}
 };
 
@@ -511,7 +533,7 @@ processing.keyPressed = function () {
 	}
 	if (KEY === 80) { //P
 		SCENE *= -1;
-		pause();
+		pause.display();
 	}
 	if (KEY === 82) { //R
 		SCENE=1;
