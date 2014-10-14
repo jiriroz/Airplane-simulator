@@ -3,7 +3,7 @@ function sketchProc(processing) {
 
 var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 1;
+var SCENE = 0;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
@@ -11,13 +11,15 @@ var groundLevel = 50; //offset of the ground from the bottom
 var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
 var cloudOffset = 300; //distance between two clouds in the x-direction
 var smokeOffset = 80; //time in milliseconds between airplane releases two smokes
-var smokeOpacityDecrase = 0.7; //amount by which the opacity of the smoke decrease
+var smokeOpacityDecrase = 0.5; //amount by which the opacity of the smoke decrease
 var planeImg = processing.loadImage('plane.png'); //169x79px
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
 var cloud2img = processing.loadImage('cloud2.png'); //164x82
 var cloud3img = processing.loadImage('cloud3.png'); //223x105
 var cloud4img = processing.loadImage('cloud4.png'); //222x116
 var cloud5img = processing.loadImage('cloud5.png'); //244x128
+var clickX = 700;
+var clickY = 300;
 
 
 var Time = function () { //keeps track of and displays time
@@ -183,7 +185,7 @@ Cloud.prototype.display = function (x,y) {
 	processing.image(this.image,x,y,this.width,this.height);
 };
 
-var Airplane = function (x,y) {
+var Airplane = function (x,y,vel) {
 	this.position = new processing.PVector(x,y);
 	this.velocityMag = 0; //magnitude, only in the x-direction
 	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
@@ -191,7 +193,7 @@ var Airplane = function (x,y) {
 	this.acceleration = 0;
 	this.angleMag = 0.05; //magnitude with which the plane will be turning
 	this.velRange = 1;
-	this.minVel = 5;
+	this.minVel = vel;
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
 	this.smokeTime = 0; //last time smoke was deployed
 };
@@ -233,14 +235,10 @@ Airplane.prototype.display = function () {
 };
 
 Airplane.prototype.run = function () { //gets called in the draw method, handles all airplane methods
-	if (this.velocityMag < 3) {
-		this.takeOff();
-	}
 	this.checkUp();
 	this.checkGround();
 	this.update();
 	this.display();
-	
 };
 
 Airplane.prototype.takeOff = function () {
@@ -272,12 +270,32 @@ Airplane.prototype.controls = function () {
 	}
 };
 
+Airplane.prototype.ai = function () { //AI for the inital screen display
+};
+
+Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a specific point
+	x = clickX;
+	y = clickY;
+	var deltaX = x-this.position.x;
+	var deltaY = y-this.position.y;
+	var alpha = Math.atan(deltaY/deltaX);
+	alpha = alpha.toFixed(1);
+	alpha = Number(alpha);
+	var currentAngle = this.angle.toFixed(1);
+	currentAngle = Number(currentAngle);
+	if (alpha > currentAngle) {
+		this.turn(1);
+	} else if (alpha < currentAngle) {
+		this.turn(-1);
+	}
+};
+
 var GameScene = function () {
 };
 
 GameScene.prototype.setup = function () {
 	time = new Time(); //defined as global
-	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-groundLevel-10);
+	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-groundLevel-10,5);
 	this.rings = [];
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
@@ -377,13 +395,18 @@ GameScene.prototype.updateSmokes = function () { //function that gets called in 
 	}
 };
 
-var InitialScene = function () { //innital screen, scene number = 0
-	this.title = new Button(400,200,400,100,processing.color(0,0,255),"Flight Aerobatics",50,100);
+var InitialScene = function() {
+    GameScene.call(this);
+	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
 	this.title.setRadius(10);
-	this.newGame = new Button(400,300,200,50,processing.color(0,0,255),"New game",30,70);
+	this.newGame = new Button(400,300,200,50,processing.color(53,228,53),"New game",30,130);
 	this.newGame.setRadius(5);
-	this.newGame.hoverHighlight = 20;
+	this.newGame.hoverHighlight = 50;
+	this.aircraft = new Airplane(0,450,3);
+	this.smokes = [];
 };
+
+InitialScene.prototype = Object.create(GameScene.prototype);
 
 InitialScene.prototype.run = function () {
 	processing.background(72,208,235);
@@ -395,6 +418,9 @@ InitialScene.prototype.run = function () {
 	processing.textSize(20);
 	processing.textAlign(processing.CENTER);
 	processing.text("Jiri Roznovjak",400,550);
+	this.aircraft.run();
+	this.updateSmokes();
+	
 };
 
 InitialScene.prototype.checkNewGame = function () { //checks if the mouse is located above the newgame
@@ -462,6 +488,8 @@ processing.draw = function () { //what gets called before the shift scene stays 
 };
 
 processing.mouseClicked = function () {
+	clickX = processing.mouseX;
+	clickY = processing.mouseY;
 	if (SCENE===0) {
 		if (initialScene.checkNewGame()) {
 			SCENE=1;
