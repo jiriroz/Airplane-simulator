@@ -129,9 +129,17 @@ var Ring = function (x,y,radius) { //visible determines whether the ring is visi
 	this.radius = radius; //radius in the y-direction
 	this.opacity = 255;
 	this.angle = 0;
+	this.fading = false;
+	this.appearing = false;
 };
 
 Ring.prototype.display = function () {
+	if (this.fading === true) {
+		this.opacity -= 8;
+	}
+	if (this.appearing === true) {
+		this.opacity += 8;
+	}
 	processing.noFill();
 	processing.strokeWeight(5);
 	processing.stroke(255,0,0,this.opacity);
@@ -142,20 +150,34 @@ Ring.prototype.display = function () {
 	processing.popMatrix();
 };
 
+Ring.prototype.checkShift = function () {
+	if (this.opacity <= 0) {
+		this.position.x = this.newXpos;
+		this.position.y = this.newYpos;
+		this.fading = false;
+	}
+	if (this.opacity >= 255) {
+		this.opacity = 255;
+		this.appearing = false;
+	}
+};
+
 Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
 	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
 		return true;
 	}
 };
 
-Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that handles when the airplane flies through the ring
+Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that generates and stores new position after the airplane flies through the ring
 	if (Math.random() < probability) {
 		var xshift = Math.random()*300+100;
 	} else {
 		var xshift = Math.random()*200*(-1)-50;
 	}
-	this.position.x = nextRing.position.x + xshift;
-	this.position.y = Math.random()*(CHEIGHT-200)+groundLevel+50;
+	this.newXpos = nextRing.position.x + xshift;
+	this.newYpos = Math.random()*(CHEIGHT-200)+groundLevel+50;
+	//this.position.x = this.newXpos;
+	//this.position.y = this.newYpos;
 };
 
 var Smoke = function (x,y) { //smoke behind the airplane
@@ -329,10 +351,16 @@ GameScene.prototype.run = function () {
 	this.shiftScene(this.aircraft);
 	this.aircraft.controls();
 	this.updateSmokes();
-	this.rings[this.activeRing].display();
+	this.rings[0].display();
+	this.rings[1].display();
+	this.rings[0].checkShift();
+	this.rings[1].checkShift();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
 		var nonActiveRing = Math.abs(Math.pow(2,this.activeRing)-2); //opposite value of the active ring
 		this.rings[this.activeRing].airplaneThrough(this.rings[nonActiveRing],this.probability);
+		this.rings[this.activeRing].fading = true;
+		this.rings[this.activeRing].appearing = false;
+		this.rings[nonActiveRing].appearing = true;
 		this.activeRing = nonActiveRing;
 		this.score += 1;
 	}
@@ -358,7 +386,7 @@ GameScene.prototype.addCloud = function (x) {
 	cloud.push(y);
 	index = Math.floor(Math.random()*4);
 	cloud.push(index);
-	if (x>0) {
+	if (x > 0) {
 		this.clouds.push(cloud);
 	} else {
 		this.clouds.splice(0,0,cloud);
@@ -443,6 +471,8 @@ InitialScene.prototype.displayClouds = function () {
 var Pause = function () { //invoked after pressing P
 	this.returnToMM = new Button(400,320,200,50,processing.color(100,100,100),'Return to Main Menu',20,40);
 	this.returnToMM.setRadius(5);
+	this.returnToMM.hoverHighlight = 0;
+	this.higlighted = false; //true if the return to main menu button is highlighted
 };
 
 Pause.prototype.display = function () {
@@ -454,6 +484,13 @@ Pause.prototype.display = function () {
 	processing.textSize(80);
 	processing.text('Pause',400,250);
 	this.returnToMM.display();
+};
+
+Pause.prototype.checkHighlight = function () {
+	if (this.returnToMM.checkMouse() && !this.higlighted) {
+		this.returnToMM.display();
+		this.highlighted = true;
+	}
 };
 
 var TimeOut = function () {
@@ -501,6 +538,7 @@ processing.draw = function () { //what gets called before the shift scene stays 
 		}
 	}
 	else if (SCENE < 0) {
+		//pause.checkHighlight(); need to finish this
 		//pause, does nothing, pause function invoked in the processing.keypressed method
 	}
 };
