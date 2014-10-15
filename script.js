@@ -7,12 +7,13 @@ var SCENE = 0;
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
-var groundLevel = 50; //offset of the ground from the bottom
+var GROUND_LEVEL = 50; //offset of the ground from the bottom
 var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
 var cloudOffset = 300; //distance between two clouds in the x-direction
 var smokeOffset = 80; //time in milliseconds between airplane releases two smokes
 var smokeOpacityDecrase = 0.5; //amount by which the opacity of the smoke decrease
 var planeImg = processing.loadImage('plane.png'); //169x79px
+var PLANE_CRASHED_IMG = processing.loadImage('plane_crashed.png'); //159x77
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
 var cloud2img = processing.loadImage('cloud2.png'); //164x82
 var cloud3img = processing.loadImage('cloud3.png'); //223x105
@@ -22,192 +23,7 @@ var clickX = 700;
 var clickY = 300;
 var clouds = [];
 var initialScene, mainScene, timeOut, pause;
-
-
-var Time = function () { //keeps track of and displays time
-	this.displayTime = 0;
-	this.currentTime = 0;
-	this.x = 0;
-	this.y = 0;
-};
-
-Time.prototype.setup = function (x,y,start) {
-	this.x = x;
-	this.y = y;
-	this.displayTime = start;
-	this.currentTime = processing.millis();
-};
-
-Time.prototype.update = function () {
-	if (processing.millis()-this.currentTime > 1000) {
-		this.currentTime = processing.millis();
-		this.displayTime -= 1;
-	}
-};
-
-Time.prototype.display = function () {
-	processing.textSize(20);
-	processing.fill(0,0,0);
-	processing.textAlign(processing.CENTER);
-	processing.text(this.displayTime,this.x,this.y);
-};
-
-Time.prototype.run = function () {
-	this.update();
-	this.display();
-};
-
-var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
-	this.position = new processing.PVector(x,y);
-	this.width = width;
-	this.height = height;
-	this.color = color;
-	this.opacity = opacity;
-	this.text = text;
-	this.textSize = textSize;
-	this.stroke = 0;
-	this.radius = 0;
-	this.hover = false;
-	this.hoverHighlight = 0;
-};
-
-Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
-	this.stroke = stroke;
-	this.strokeColor = color;
-};
-Button.prototype.setRadius = function (radius) {
-	this.radius = radius;
-};
-
-Button.prototype.setOpacity = function (opacity) {
-	this.opacity = opacity;
-};
-
-Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
-	var right = this.position.x+this.width/2;
-	var left = this.position.x-this.width/2;
-	var up = this.position.y-this.height/2;
-	var down = this.position.y+this.height/2;
-	if (processing.mouseX>left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
-		return true;
-	}
-};
-Button.prototype.display = function () {
-	if (this.stroke === 0) {
-		processing.noStroke();
-	} else {
-		processing.stroke(this.strokeColor);
-		processing.strokeWeight(this.stroke);
-	}
-	processing.rectMode(processing.CENTER);
-	if (this.hover) {
-		processing.fill(this.color,this.opacity+this.hoverHighlight);
-	} else {
-		processing.fill(this.color,this.opacity);
-	}
-	processing.rect(this.position.x,this.position.y,this.width,this.height,this.radius);
-	processing.textSize(this.textSize);
-	processing.textAlign(processing.CENTER);
-	processing.fill(0,0,0);
-	processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
-	this.hover = false;
-};
-
-var Ground = function (xCenter) { //ground function, later will be animated
-	this.xCenter = xCenter;
-};
-
-Ground.prototype.display = function () {
-	processing.noStroke();
-	processing.fill(131,247,73);
-	processing.rectMode(processing.CORNER);
-	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-groundLevel,this.xCenter+CWIDTH/2,CHEIGHT);
-};
-
-var Ring = function (x,y,radius) { //visible determines whether the ring is visible at first, can have values 1 or 0
-	this.position = new processing.PVector(x,y);
-	this.radius = radius; //radius in the y-direction
-	this.opacity = 255;
-	this.angle = 0;
-	this.fading = false;
-	this.appearing = false;
-};
-
-Ring.prototype.display = function () {
-	if (this.fading === true) {
-		this.opacity -= 8;
-	}
-	if (this.appearing === true) {
-		this.opacity += 8;
-	}
-	processing.noFill();
-	processing.strokeWeight(5);
-	processing.stroke(255,0,0,this.opacity);
-	processing.pushMatrix();
-	processing.translate(this.position.x,this.position.y);
-	processing.rotate(this.angle);
-	processing.ellipse(0,0,this.radius,this.radius*2);
-	processing.popMatrix();
-};
-
-Ring.prototype.checkShift = function () {
-	if (this.opacity <= 0) {
-		this.position.x = this.newXpos;
-		this.position.y = this.newYpos;
-		this.fading = false;
-	}
-	if (this.opacity >= 255) {
-		this.opacity = 255;
-		this.appearing = false;
-	}
-};
-
-Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
-	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
-		return true;
-	}
-};
-
-Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that generates and stores new position after the airplane flies through the ring
-	if (Math.random() < probability) {
-		var xshift = Math.random()*300+100;
-	} else {
-		var xshift = Math.random()*200*(-1)-50;
-	}
-	this.newXpos = nextRing.position.x + xshift;
-	this.newYpos = Math.random()*(CHEIGHT-200)+groundLevel+50;
-	//this.position.x = this.newXpos;
-	//this.position.y = this.newYpos;
-};
-
-var Smoke = function (x,y) { //smoke behind the airplane
-	this.position = new processing.PVector(x,y);
-	this.opacity = Math.random()*60+50;
-	var radius = Math.random()*2+5; //implement standard distribution
-	this.radius = radius;
-};
-
-Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= smokeOpacityDecrase;
-};
-
-Smoke.prototype.display = function () {
-	processing.noStroke();
-	var col = processing.color(140,140,140,this.opacity);
-	processing.fill(col);
-	processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
-};
-
-var Cloud = function (img,w,h) {
-	this.image = img;
-	this.height = h;
-	this.width = w;
-};
-
-Cloud.prototype.display = function (x,y) {
-	processing.imageMode(processing.CENTER);
-	processing.image(this.image,x,y,this.width,this.height);
-};
+var GROUND_SHADOW = 15; //shadow of the airplane will appear x pixes from the margin of the ground
 
 var Airplane = function (x,y,vel) {
 	this.position = new processing.PVector(x,y);
@@ -248,13 +64,16 @@ Airplane.prototype.turn = function (direction) {
 };
 
 Airplane.prototype.display = function () {
-	//simple triangle for now
 	processing.fill(0,0,0);
 	processing.pushMatrix();
 	processing.translate(this.position.x,this.position.y);
-	processing.rotate(this.angle);
 	processing.imageMode(processing.CENTER);
-	processing.image(planeImg,0,0,56,26);
+	if (this.isFlying === 1) {
+		processing.rotate(this.angle);
+		processing.image(planeImg,0,0,56,26);
+	} else {
+		processing.image(PLANE_CRASHED_IMG,0,0,56,26);
+	}
 	processing.popMatrix();
 };
 
@@ -277,13 +96,14 @@ Airplane.prototype.checkUp = function () { //function that handles when airplane
 };
 
 Airplane.prototype.checkGround = function () { //checks if the airplane crashed to the ground
-	if (this.position.y > CHEIGHT-groundLevel) {
+	if (this.position.y > CHEIGHT-GROUND_LEVEL+GROUND_SHADOW) {
 		this.crash();
 	}
 };
 
 Airplane.prototype.crash = function () { //crashes the airplane (needs further implementation)
 	this.isFlying = 0;
+	
 };
 
 Airplane.prototype.controls = function () {
@@ -314,21 +134,91 @@ Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a s
 	}
 };
 
+var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
+	this.position = new processing.PVector(x,y);
+	this.width = width;
+	this.height = height;
+	this.color = color;
+	this.opacity = opacity;
+	this.text = text;
+	this.textSize = textSize;
+	this.stroke = 0;
+	this.radius = 0;
+	this.hover = false;
+	this.hoverHighlight = 0;
+};
+
+Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
+	this.stroke = stroke;
+	this.strokeColor = color;
+};
+
+Button.prototype.setRadius = function (radius) {
+	this.radius = radius;
+};
+
+Button.prototype.setOpacity = function (opacity) {
+	this.opacity = opacity;
+};
+
+Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
+	var right = this.position.x+this.width/2;
+	var left = this.position.x-this.width/2;
+	var up = this.position.y-this.height/2;
+	var down = this.position.y+this.height/2;
+	if (processing.mouseX>left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
+		return true;
+	}
+};
+
+Button.prototype.display = function () {
+	if (this.stroke === 0) {
+		processing.noStroke();
+	} else {
+		processing.stroke(this.strokeColor);
+		processing.strokeWeight(this.stroke);
+	}
+	processing.rectMode(processing.CENTER);
+	if (this.hover) {
+		processing.fill(this.color,this.opacity+this.hoverHighlight);
+	} else {
+		processing.fill(this.color,this.opacity);
+	}
+	processing.rect(this.position.x,this.position.y,this.width,this.height,this.radius);
+	processing.textSize(this.textSize);
+	processing.textAlign(processing.CENTER);
+	processing.fill(0,0,0);
+	processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
+	this.hover = false;
+};
+
+var Cloud = function (img,w,h) {
+	this.image = img;
+	this.height = h;
+	this.width = w;
+};
+
+Cloud.prototype.display = function (x,y) {
+	processing.imageMode(processing.CENTER);
+	processing.image(this.image,x,y,this.width,this.height);
+};
+
 var GameScene = function () {
 };
 
 GameScene.prototype.setup = function () {
 	time = new Time(); //defined as global
-	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-groundLevel-10,5);
-	this.rings = [];
+	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,5);
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
 	this.probability = 0.75; //probability that a new ring will appear forward of the airplane
-	this.rings.push(new Ring(900,200,30));
-	this.rings.push(new Ring(1200,300,30));
-	this.activeRing = 0;
+	this.rings = [];
+	this.rings.push(new Ring(900,200,30,true));
+	this.rings.push(new Ring(1200,300,30,false));
+	this.activeRing = 0; //index of the active and nonactive ring in the rings array
+	this.nonActiveRing = 1;
 	this.clouds = []; //coordinates and types of clouds
 	this.generateClouds();
 	
@@ -347,28 +237,29 @@ GameScene.prototype.run = function () {
 	time.run();
 	this.shiftScene(this.aircraft); //shifts the scene by third and between two shifts clouds are displayed
 	this.displayClouds();
+	this.checkClouds(); //checks if new clouds need to be added and adds them
 	this.shiftScene(this.aircraft);
 	this.shiftScene(this.aircraft);
-	this.aircraft.controls();
+	this.grounds[0].displayShadow(this.aircraft);
 	this.updateSmokes();
-	this.rings[0].display();
-	this.rings[1].display();
-	this.rings[0].checkShift();
-	this.rings[1].checkShift();
+	this.rings[0].update();
+	this.rings[1].update();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		var nonActiveRing = Math.abs(Math.pow(2,this.activeRing)-2); //opposite value of the active ring
-		this.rings[this.activeRing].airplaneThrough(this.rings[nonActiveRing],this.probability);
+		this.rings[this.activeRing].airplaneThrough(this.rings[this.nonActiveRing],this.probability);
 		this.rings[this.activeRing].fading = true;
-		this.rings[this.activeRing].appearing = false;
-		this.rings[nonActiveRing].appearing = true;
-		this.activeRing = nonActiveRing;
+		this.rings[this.activeRing].appearing = false; //if it was appearing at the same time turn it off
+		this.rings[this.nonActiveRing].appearing = true;
+		this.rings[this.nonActiveRing].fading = false; //if it was fading at the same time turn it off
+		var temp = this.activeRing; //swaps active and nonactive ring
+		this.activeRing = this.nonActiveRing;
+		this.nonActiveRing = temp;
 		this.score += 1;
 	}
+	this.aircraft.controls();
 	this.aircraft.run();
 	if (time.displayTime === 0) {
 		SCENE = 1.5;
 	}
-	this.checkClouds();
 };
 
 GameScene.prototype.generateClouds = function () {
@@ -425,6 +316,25 @@ GameScene.prototype.updateSmokes = function () { //function that gets called in 
 	}
 };
 
+var Ground = function (xCenter) { //ground function, later will be animated
+	this.xCenter = xCenter;
+};
+
+Ground.prototype.display = function () {
+	processing.noStroke();
+	processing.fill(131,247,73);
+	processing.rectMode(processing.CORNER);
+	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-GROUND_LEVEL,this.xCenter+CWIDTH/2,CHEIGHT);
+};
+
+Ground.prototype.displayShadow = function (airplane) {
+	processing.noStroke();
+	var opacity = (airplane.position.y)/CHEIGHT * 100;
+	var w = airplane.position.y/CHEIGHT * 10 + 20;
+	processing.fill(0,0,0,opacity);
+	processing.ellipse(airplane.position.x,CHEIGHT - GROUND_LEVEL + GROUND_SHADOW,w,w/4);
+};
+
 var InitialScene = function() {
     GameScene.call(this);
 	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
@@ -469,9 +379,8 @@ InitialScene.prototype.displayClouds = function () {
 };
 
 var Pause = function () { //invoked after pressing P
-	this.returnToMM = new Button(400,320,200,50,processing.color(100,100,100),'Return to Main Menu',20,40);
+	this.returnToMM = new Button(400,320,200,50,processing.color(56,69,183),'Return to Main Menu',20,40);
 	this.returnToMM.setRadius(5);
-	this.returnToMM.hoverHighlight = 0;
 	this.higlighted = false; //true if the return to main menu button is highlighted
 };
 
@@ -479,10 +388,11 @@ Pause.prototype.display = function () {
 	processing.noStroke();
 	processing.fill(150,150,150,100);
 	processing.rectMode(processing.CORNER);
+	processing.textAlign(processing.CENTER);
 	processing.rect(0,0,CWIDTH,CHEIGHT);
 	processing.fill(0,0,0);
 	processing.textSize(80);
-	processing.text('Pause',400,250);
+	processing.text('Pause',CWIDTH/2,0.4*CHEIGHT);
 	this.returnToMM.display();
 };
 
@@ -491,6 +401,121 @@ Pause.prototype.checkHighlight = function () {
 		this.returnToMM.display();
 		this.highlighted = true;
 	}
+};
+
+var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
+	this.position = new processing.PVector(x,y);
+	this.radius = radius; //radius in the y-direction
+	if (visible) {
+		this.opacity = 255;
+	} else { this.opacity = 0;
+	}
+	this.angle = 0;
+	this.fading = false; //the ring is not appearing nor fading when initialized
+	this.appearing = false;
+	this.rateFade = 8; //rate by which the ring will be appearing/fading
+};
+
+Ring.prototype.display = function () {
+	if (this.fading === true) {
+		this.opacity -= this.rateFade;
+	}
+	if (this.appearing === true) {
+		this.opacity += this.rateFade;
+	}
+	processing.noFill();
+	processing.strokeWeight(5);
+	processing.stroke(255,0,0,this.opacity);
+	processing.pushMatrix();
+	processing.translate(this.position.x,this.position.y);
+	processing.rotate(this.angle);
+	processing.ellipse(0,0,this.radius,this.radius*2);
+	processing.popMatrix();
+};
+
+Ring.prototype.checkShift = function () { //checks if the ring is supposed to be shifted
+	if (this.opacity < 0) {
+		this.opacity = 0;
+		this.position.x = this.newXpos;
+		this.position.y = this.newYpos;
+		this.fading = false;
+	}
+	if (this.opacity > 255) {
+		this.opacity = 255;
+		this.appearing = false;
+	}
+};
+
+Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
+	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
+		return true;
+	}
+};
+
+Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that generates and stores new position after the airplane flies through the ring
+	if (Math.random() < probability) {
+		var xshift = Math.random()*250+100;
+	} else {
+		var xshift = Math.random()*200*(-1)-50;
+	}
+	this.newXpos = nextRing.position.x + xshift;
+	this.newYpos = Math.random()*(CHEIGHT-200)+GROUND_LEVEL+50;
+};
+
+Ring.prototype.update = function () {
+	this.display();
+	this.checkShift();
+};
+
+var Smoke = function (x,y) { //smoke behind the airplane
+	this.position = new processing.PVector(x,y);
+	this.opacity = Math.random()*60+50;
+	var radius = Math.random()*2+5; //implement standard distribution
+	this.radius = radius;
+};
+
+Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
+	this.opacity -= smokeOpacityDecrase;
+};
+
+Smoke.prototype.display = function () {
+	processing.noStroke();
+	var col = processing.color(140,140,140,this.opacity);
+	processing.fill(col);
+	processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
+};
+
+var Time = function () { //keeps track of and displays time
+	this.displayTime = 0;
+	this.currentTime = 0;
+	this.x = 0;
+	this.y = 0;
+};
+
+Time.prototype.setup = function (x,y,start) {
+	this.x = x;
+	this.y = y;
+	this.displayTime = start;
+	this.currentTime = processing.millis();
+};
+
+Time.prototype.update = function () {
+	if (processing.millis()-this.currentTime > 1000) {
+		this.currentTime = processing.millis();
+		this.displayTime -= 1;
+	}
+};
+
+Time.prototype.display = function () {
+	processing.textSize(20);
+	processing.fill(0,0,0);
+	processing.textAlign(processing.CENTER);
+	processing.text(this.displayTime,this.x,this.y);
+};
+
+Time.prototype.run = function () {
+	this.update();
+	this.display();
 };
 
 var TimeOut = function () {
@@ -503,14 +528,14 @@ TimeOut.prototype.display = function (score) {
 	processing.fill(150,150,150,100);
 	processing.rectMode(processing.CORNER);
 	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.textSize(40);
+	processing.textAlign(processing.CENTER);
 	processing.fill(0,0,0);
-	processing.text("Time Out!",300,200);
+	processing.textSize(80);
+	processing.text('Time Out!',CWIDTH/2,0.4*CHEIGHT);
 	processing.textSize(20);
 	processing.text("Final Score:",300,250);
 	processing.text(score,400,250);
 };
-
 
 clouds.push(new Cloud(cloud1img,214,108));
 clouds.push(new Cloud(cloud2img,165,82));
@@ -543,27 +568,6 @@ processing.draw = function () { //what gets called before the shift scene stays 
 	}
 };
 
-processing.mouseClicked = function () {
-	clickX = processing.mouseX;
-	clickY = processing.mouseY;
-	if (SCENE===0) {
-		if (initialScene.checkNewGame()) {
-			SCENE=1;
-		}
-	} else if (SCENE===1) {
-		//SCENE=0;
-	} else if (SCENE===1.5) {
-		SCENE=1;
-		mainScene.setup();
-		timeOut.displayed = false;
-		time.setup(750,40,30);
-	} else if (SCENE<0) {
-		if (pause.returnToMM.checkMouse()) {
-			SCENE = 0;
-		}
-	}
-};
-
 processing.keyPressed = function () {
 	KEY = processing.keyCode;
 	if (KEY === 73) { //I
@@ -583,6 +587,27 @@ processing.keyPressed = function () {
 
 processing.keyReleased = function () { //Key is reset to 0 when released
 	KEY = 0;
+};
+
+processing.mouseClicked = function () {
+	clickX = processing.mouseX;
+	clickY = processing.mouseY;
+	if (SCENE===0) {
+		if (initialScene.checkNewGame()) {
+			SCENE=1;
+		}
+	} else if (SCENE===1) {
+		//SCENE=0;
+	} else if (SCENE===1.5) {
+		SCENE=1;
+		mainScene.setup();
+		timeOut.displayed = false;
+		time.setup(750,40,30);
+	} else if (SCENE<0) {
+		if (pause.returnToMM.checkMouse()) {
+			SCENE = 0;
+		}
+	}
 };
 
 }
