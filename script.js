@@ -137,6 +137,7 @@ Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a s
 	}
 };
 
+
 var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
 	this.position = new processing.PVector(x,y);
 	this.width = width;
@@ -169,7 +170,7 @@ Button.prototype.checkMouse = function () { //returns true is mouse is above the
 	var left = this.position.x-this.width/2;
 	var up = this.position.y-this.height/2;
 	var down = this.position.y+this.height/2;
-	if (processing.mouseX>left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
+	if (processing.mouseX > left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
 		return true;
 	}
 };
@@ -195,6 +196,7 @@ Button.prototype.display = function () {
 	this.hover = false;
 };
 
+
 var Cloud = function (img,w,h) {
 	this.image = img;
 	this.height = h;
@@ -206,6 +208,7 @@ Cloud.prototype.display = function (x,y) {
 	processing.image(this.image,x,y,this.width,this.height);
 };
 
+
 var EndLevel = function (text) {
 	this.displayed = false;
 	this.text = text;
@@ -214,7 +217,6 @@ var EndLevel = function (text) {
 	this.returnToMM.setRadius(5);
 	this.levelFinisher = new Button (400,390,120,50,processing.color(56,69,183),'Try Again',20,60);
 	this.levelFinisher.setRadius(5);
-
 };
 
 EndLevel.prototype.display = function (score) {
@@ -258,6 +260,7 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 		this.displayed = false;
 	}
 };
+
 
 var GameScene = function () {
 	this.time = new Time();
@@ -303,7 +306,7 @@ GameScene.prototype.run = function () {
 	this.rings[0].update();
 	this.rings[1].update();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		this.rings[this.activeRing].newPosition(this.rings[this.nonActiveRing].position.x);
+		this.rings[this.activeRing].storeNextRingPosition(this.rings[this.nonActiveRing].position.x);
 		this.rings[this.activeRing].fading = true;
 		this.rings[this.activeRing].appearing = false; //if it was appearing at the same time turn it off
 		this.rings[this.nonActiveRing].appearing = true;
@@ -393,12 +396,12 @@ Ground.prototype.displayShadow = function (airplane) {
 	processing.ellipse(airplane.position.x,CHEIGHT - GROUND_LEVEL + GROUND_SHADOW,w,w/4);
 };
 
+
 var InitialScene = function() {
     GameScene.call(this);
 };
 
 InitialScene.prototype = Object.create(GameScene.prototype);
-
 InitialScene.prototype.setup = function () {
 	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
 	this.title.setRadius(10);
@@ -445,6 +448,7 @@ InitialScene.prototype.mouseHandler = function () {
 	}
 };
 
+
 var Pause = function () { //invoked after pressing P
 	this.resume = new Button(400,300,150,50,processing.color(56,69,183),'Resume',20,60);
 	this.resume.setRadius(5);
@@ -473,11 +477,13 @@ Pause.prototype.mouseHandler = function () {
 	}
 };
 
+
 var returnToMainMenu = function () { //what should the program do when I return to main menu
 	initialScene.setup();
 	SCENE = 0;
 	LEVEL = 1;
 };
+
 
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
 	this.position = new processing.PVector(x,y);
@@ -498,6 +504,7 @@ var Ring = function (x,y,radius,visible) { //visible determines whether the ring
 	this.verticalOscillating = true;
 	this.verticalSine = 0; //helper variable for vertical oscillation
 	this.positionYStatic = this.position.y; //stores the vertical position for the oscillation
+	this.nextRingX = 0; //x-position of the next ring
 };
 
 Ring.prototype.display = function () {
@@ -527,11 +534,10 @@ Ring.prototype.display = function () {
 	processing.popMatrix();
 };
 
-Ring.prototype.checkShift = function () { //checks if the ring is supposed to be shifted and shifts it
+Ring.prototype.checkOpacityToShift = function () { //checks if the ring is supposed to be shifted and shifts it
 	if (this.opacity < 0) {
+		this.newPosition();
 		this.opacity = 0;
-		this.position.x = this.newXpos;
-		this.position.y = this.newYpos;
 		this.positionYStatic = this.position.y; //stores the y-position (we need it because the position will be changing)
 		this.fading = false;
 		this.newRingData();
@@ -548,14 +554,14 @@ Ring.prototype.checkThrough = function (plane) { //returns true if airplane is i
 	}
 };
 
-Ring.prototype.newPosition = function (nextRingX) { //method that generates and stores new ring position. nextRingX is an x-position of the next ring
+Ring.prototype.newPosition = function () { //method that generates and stores new ring position.
 	if (Math.random() < 0.75) {
 		var xshift = Math.random()*250+100;
 	} else {
 		var xshift = Math.random()*200*(-1)-50;
 	}
-	this.newXpos = nextRingX + xshift;
-	this.newYpos = Math.random()*(CHEIGHT-200)+GROUND_LEVEL+50;
+	this.position.x = this.nextRingX + xshift;
+	this.position.y = Math.random()*(CHEIGHT - 200) - GROUND_LEVEL + 50;
 };
 
 Ring.prototype.newRingData = function () { //generates new ring data (except new position, for which you need to know the position of the next ring
@@ -578,14 +584,19 @@ Ring.prototype.newRingData = function () { //generates new ring data (except new
 	this.radiusSine = 0;
 };
 
+Ring.prototype.storeNextRingPosition = function (x) {
+	this.nextRingX = x;
+};
+
 Ring.prototype.update = function () {
 	this.display();
-	this.checkShift();
+	this.checkOpacityToShift();
 };
 
 var scoreNeeded = function () { //determines what score is needed in each level
 	return (5+2*LEVEL);	
 };
+
 
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
@@ -604,6 +615,7 @@ Smoke.prototype.display = function () {
 	processing.fill(col);
 	processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
 };
+
 
 var Time = function () { //keeps track of and displays time
 	this.displayTime = 0;
@@ -635,6 +647,7 @@ Time.prototype.run = function () {
 	this.update();
 	this.display();
 };
+
 
 
 clouds.push(new Cloud(cloud1img,214,108));
