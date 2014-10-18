@@ -271,7 +271,6 @@ GameScene.prototype.setup = function (level) {
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
-	this.probability = 0.75; //probability that a new ring will appear forward of the airplane
 	this.rings = [];
 	this.rings.push(new Ring(900,200,30,true));
 	this.rings.push(new Ring(1200,300,30,false));
@@ -279,7 +278,6 @@ GameScene.prototype.setup = function (level) {
 	this.nonActiveRing = 1;
 	this.clouds = []; //coordinates and types of clouds
 	this.generateClouds();
-	
 };
 
 GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
@@ -305,7 +303,7 @@ GameScene.prototype.run = function () {
 	this.rings[0].update();
 	this.rings[1].update();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		this.rings[this.activeRing].newPosition(this.rings[this.nonActiveRing],this.probability);
+		this.rings[this.activeRing].newPosition(this.rings[this.nonActiveRing].position.x);
 		this.rings[this.activeRing].fading = true;
 		this.rings[this.activeRing].appearing = false; //if it was appearing at the same time turn it off
 		this.rings[this.nonActiveRing].appearing = true;
@@ -483,8 +481,9 @@ var returnToMainMenu = function () { //what should the program do when I return 
 
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
 	this.position = new processing.PVector(x,y);
-	this.radius = radius; //constant radius, actual radius will oscilate around this value
-	this.displayRadius = radius; //actual radius in the y direction
+	this.radiusConst = radius; //constant radius, actual radius will oscilate around this value
+	this.radius = radius; //radius in the y direction before dynamic oscillation
+	this.currentRadius = radius; //actual radius in the y direction after both oscillations
 	if (visible) {
 		this.opacity = 255;
 	} else {
@@ -494,8 +493,11 @@ var Ring = function (x,y,radius,visible) { //visible determines whether the ring
 	this.fading = false; //the ring is not appearing nor fading when initialized
 	this.appearing = false;
 	this.rateFade = 8; //rate by which the ring will be appearing/fading
-	this.radiusOscillating = false;
+	this.radiusOscillating = true;
 	this.radiusSine = 0; //helper variable for the sine function that causes the radius oscillation
+	this.verticalOscillating = true;
+	this.verticalSine = 0; //helper variable for vertical oscillation
+	this.positionYStatic = this.position.y; //stores the vertical position for the oscillation
 };
 
 Ring.prototype.display = function () {
@@ -505,10 +507,15 @@ Ring.prototype.display = function () {
 	if (this.appearing === true) {
 		this.opacity += this.rateFade;
 	}
-	var ratio = 1;
+	this.currentRadius = this.radius;
 	if (this.radiusOscillating) {
-		this.radiusSine += 0.05; //0.1 determines how quickly the radius oscillates
-		ratio = 0.4 * Math.sin(this.radiusSine) + 1; //0.3 is the range of the oscillation and 1 the offset
+		var ratioRadius = 0.4 * Math.sin(this.radiusSine) + 1; //0.3 is the range of the oscillation and 1 the offset
+		this.radiusSine += 0.05; //determines how quickly the radius oscillates
+		this.currentRadius = this.radius*ratioRadius;
+	}
+	if (this.verticalOscillating) {
+		this.position.y = 100 * Math.sin(this.verticalSine) + this.positionYStatic; //oscillating in the y direction
+		this.verticalSine += 0.02;
 	}
 	processing.noFill();
 	processing.strokeWeight(5);
@@ -516,7 +523,7 @@ Ring.prototype.display = function () {
 	processing.pushMatrix();
 	processing.translate(this.position.x,this.position.y);
 	processing.rotate(this.angle);
-	processing.ellipse(0,0,this.displayRadius*ratio,this.displayRadius*2*ratio);
+	processing.ellipse(0,0,this.currentRadius,this.currentRadius*2);
 	processing.popMatrix();
 };
 
@@ -525,6 +532,7 @@ Ring.prototype.checkShift = function () { //checks if the ring is supposed to be
 		this.opacity = 0;
 		this.position.x = this.newXpos;
 		this.position.y = this.newYpos;
+		this.positionYStatic = this.position.y; //stores the y-position (we need it because the position will be changing)
 		this.fading = false;
 		this.newRingData();
 	}
@@ -535,32 +543,38 @@ Ring.prototype.checkShift = function () { //checks if the ring is supposed to be
 };
 
 Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
-	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.radius && plane.position.y<this.position.y+this.radius) {
+	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.currentRadius && plane.position.y<this.position.y+this.currentRadius) {
 		return true;
 	}
 };
 
-Ring.prototype.newPosition = function (nextRing,probability) { //method that generates and stores new ring position
-	if (Math.random() < probability) {
+Ring.prototype.newPosition = function (nextRingX) { //method that generates and stores new ring position. nextRingX is an x-position of the next ring
+	if (Math.random() < 0.75) {
 		var xshift = Math.random()*250+100;
 	} else {
 		var xshift = Math.random()*200*(-1)-50;
 	}
-	this.newXpos = nextRing.position.x + xshift;
+	this.newXpos = nextRingX + xshift;
 	this.newYpos = Math.random()*(CHEIGHT-200)+GROUND_LEVEL+50;
 };
 
 Ring.prototype.newRingData = function () { //generates new ring data (except new position, for which you need to know the position of the next ring
 	if (Math.random() > 0.5) { //if true ring will have a new radius. Depend on the level.
-		this.displayRadius = this.radius*(Math.random()*0.5+0.5);
+		this.radius = this.radiusConst*(Math.random()*0.5+0.5);
 	} else {
-		this.displayRadius = this.radius;
+		this.radius = this.radiusConst;
 	}
 	if (Math.random() > 0) { //determines if radius will be oscillating
 		this.radiusOscillating = true;
 	} else {
 		this.radiusOscillating = false;
 	}
+	if (Math.random() > 0) { //determines vertical oscillation
+		this.verticalOscillating = true;
+	} else {
+		this.verticalOscillating = false;
+	}
+	this.verticalSine = 0;
 	this.radiusSine = 0;
 };
 
@@ -576,7 +590,7 @@ var scoreNeeded = function () { //determines what score is needed in each level
 var Smoke = function (x,y) { //smoke behind the airplane
 	this.position = new processing.PVector(x,y);
 	this.opacity = Math.random()*60+50;
-	var radius = Math.random()*2+5; //implement standard distribution
+	var radius = Math.random()*2+5;
 	this.radius = radius;
 };
 
