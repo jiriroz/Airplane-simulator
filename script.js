@@ -206,10 +206,6 @@ Cloud.prototype.display = function (x,y) {
 	processing.image(this.image,x,y,this.width,this.height);
 };
 
-var scoreNeeded = function () { //determines what score is needed in each level
-	return (8+2*LEVEL);	
-};
-
 var EndLevel = function (text) {
 	this.displayed = false;
 	this.text = text;
@@ -256,7 +252,7 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 	if (this.levelFinisher.checkMouse()) {
 		if (this.win) {
 			LEVEL += 1;
-		}	
+		}
 		mainScene.setup(LEVEL);
 		SCENE = 1;
 		this.displayed = false;
@@ -264,12 +260,12 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 };
 
 var GameScene = function () {
-	time = new Time(); //defined as global
+	this.time = new Time();
 };
 
 GameScene.prototype.setup = function (level) {
 	this.level = level;
-	time.setup(20);
+	this.time.setup(20);
 	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,5);
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
@@ -296,7 +292,7 @@ GameScene.prototype.run = function () {
 	processing.background(72,208,235);
 	this.grounds[0].display();
 	processing.fill(0,0,0);
-	time.run();
+	this.time.run();
 	processing.textSize(20);
 	processing.text("Level " + this.level,50,40);
 	this.shiftScene(this.aircraft); //shifts the scene by third and between two shifts clouds are displayed
@@ -309,7 +305,7 @@ GameScene.prototype.run = function () {
 	this.rings[0].update();
 	this.rings[1].update();
 	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		this.rings[this.activeRing].airplaneThrough(this.rings[this.nonActiveRing],this.probability);
+		this.rings[this.activeRing].newPosition(this.rings[this.nonActiveRing],this.probability);
 		this.rings[this.activeRing].fading = true;
 		this.rings[this.activeRing].appearing = false; //if it was appearing at the same time turn it off
 		this.rings[this.nonActiveRing].appearing = true;
@@ -321,7 +317,7 @@ GameScene.prototype.run = function () {
 	}
 	this.aircraft.controls();
 	this.aircraft.run();
-	if (time.displayTime === 0) {
+	if (this.time.displayTime === 0) {
 		SCENE = 1.5;
 	}
 };
@@ -487,15 +483,19 @@ var returnToMainMenu = function () { //what should the program do when I return 
 
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
 	this.position = new processing.PVector(x,y);
-	this.radius = radius; //radius in the y-direction
+	this.radius = radius; //constant radius, actual radius will oscilate around this value
+	this.displayRadius = radius; //actual radius in the y direction
 	if (visible) {
 		this.opacity = 255;
-	} else { this.opacity = 0;
+	} else {
+		this.opacity = 0;
 	}
 	this.angle = 0;
 	this.fading = false; //the ring is not appearing nor fading when initialized
 	this.appearing = false;
 	this.rateFade = 8; //rate by which the ring will be appearing/fading
+	this.radiusOscillating = false;
+	this.radiusSine = 0; //helper variable for the sine function that causes the radius oscillation
 };
 
 Ring.prototype.display = function () {
@@ -505,22 +505,28 @@ Ring.prototype.display = function () {
 	if (this.appearing === true) {
 		this.opacity += this.rateFade;
 	}
+	var ratio = 1;
+	if (this.radiusOscillating) {
+		this.radiusSine += 0.05; //0.1 determines how quickly the radius oscillates
+		ratio = 0.4 * Math.sin(this.radiusSine) + 1; //0.3 is the range of the oscillation and 1 the offset
+	}
 	processing.noFill();
 	processing.strokeWeight(5);
 	processing.stroke(255,0,0,this.opacity);
 	processing.pushMatrix();
 	processing.translate(this.position.x,this.position.y);
 	processing.rotate(this.angle);
-	processing.ellipse(0,0,this.radius,this.radius*2);
+	processing.ellipse(0,0,this.displayRadius*ratio,this.displayRadius*2*ratio);
 	processing.popMatrix();
 };
 
-Ring.prototype.checkShift = function () { //checks if the ring is supposed to be shifted
+Ring.prototype.checkShift = function () { //checks if the ring is supposed to be shifted and shifts it
 	if (this.opacity < 0) {
 		this.opacity = 0;
 		this.position.x = this.newXpos;
 		this.position.y = this.newYpos;
 		this.fading = false;
+		this.newRingData();
 	}
 	if (this.opacity > 255) {
 		this.opacity = 255;
@@ -534,7 +540,7 @@ Ring.prototype.checkThrough = function (plane) { //returns true if airplane is i
 	}
 };
 
-Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that generates and stores new position after the airplane flies through the ring
+Ring.prototype.newPosition = function (nextRing,probability) { //method that generates and stores new ring position
 	if (Math.random() < probability) {
 		var xshift = Math.random()*250+100;
 	} else {
@@ -544,9 +550,27 @@ Ring.prototype.airplaneThrough = function (nextRing,probability) { //method that
 	this.newYpos = Math.random()*(CHEIGHT-200)+GROUND_LEVEL+50;
 };
 
+Ring.prototype.newRingData = function () { //generates new ring data (except new position, for which you need to know the position of the next ring
+	if (Math.random() > 0.5) { //if true ring will have a new radius. Depend on the level.
+		this.displayRadius = this.radius*(Math.random()*0.5+0.5);
+	} else {
+		this.displayRadius = this.radius;
+	}
+	if (Math.random() > 0) { //determines if radius will be oscillating
+		this.radiusOscillating = true;
+	} else {
+		this.radiusOscillating = false;
+	}
+	this.radiusSine = 0;
+};
+
 Ring.prototype.update = function () {
 	this.display();
 	this.checkShift();
+};
+
+var scoreNeeded = function () { //determines what score is needed in each level
+	return (5+2*LEVEL);	
 };
 
 var Smoke = function (x,y) { //smoke behind the airplane
