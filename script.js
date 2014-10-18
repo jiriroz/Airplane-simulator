@@ -3,7 +3,8 @@ function sketchProc(processing) {
 
 var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
 var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 0;
+var SCENE = 0; //current scene. (initial screen, game, pause, crash screen, time out
+var LEVEL = 1; //current level
 processing.size(CWIDTH,CHEIGHT);
 processing.background(72,208,235);
 var sceneOffset = 100; //offset for scene shifting
@@ -13,17 +14,17 @@ var cloudOffset = 300; //distance between two clouds in the x-direction
 var smokeOffset = 80; //time in milliseconds between airplane releases two smokes
 var smokeOpacityDecrase = 0.5; //amount by which the opacity of the smoke decrease
 var planeImg = processing.loadImage('plane.png'); //169x79px
-var PLANE_CRASHED_IMG = processing.loadImage('plane_crashed.png'); //159x77
+var PLANE_CRASHED_R = processing.loadImage('plane_crashed_right.png'); //159x77
+var PLANE_CRASHED_L = processing.loadImage('plane_crashed_left.png'); //159x77
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
 var cloud2img = processing.loadImage('cloud2.png'); //164x82
 var cloud3img = processing.loadImage('cloud3.png'); //223x105
 var cloud4img = processing.loadImage('cloud4.png'); //222x116
 var cloud5img = processing.loadImage('cloud5.png'); //244x128
-var clickX = 700;
-var clickY = 300;
 var clouds = [];
 var initialScene, mainScene, timeOut, pause;
 var GROUND_SHADOW = 15; //shadow of the airplane will appear x pixes from the margin of the ground
+
 
 var Airplane = function (x,y,vel) {
 	this.position = new processing.PVector(x,y);
@@ -58,6 +59,7 @@ Airplane.prototype.applyForce = function (force) {
 
 Airplane.prototype.turn = function (direction) {
 	//gets called in the event handler function, changes the angle of the airplane according to direction (positive/negative)
+	//clockwise positive, counterclockwise negative
 	var angleMag = this.angleMag;
 	angleMag *= direction;
 	this.angle += angleMag;
@@ -71,8 +73,12 @@ Airplane.prototype.display = function () {
 	if (this.isFlying === 1) {
 		processing.rotate(this.angle);
 		processing.image(planeImg,0,0,56,26);
-	} else {
-		processing.image(PLANE_CRASHED_IMG,0,0,56,26);
+	} else if ((this.angle >= 0 && this.angle <= Math.PI/2) || (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2) ) {
+		processing.image(PLANE_CRASHED_R,0,0,56,26);
+		SCENE = 1.7;
+	} else if ((this.angle > Math.PI/2 && this.angle < Math.PI) || (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI) ) {
+		processing.image(PLANE_CRASHED_L,0,0,56,26);
+		SCENE = 1.7;
 	}
 	processing.popMatrix();
 };
@@ -101,12 +107,11 @@ Airplane.prototype.checkGround = function () { //checks if the airplane crashed 
 	}
 };
 
-Airplane.prototype.crash = function () { //crashes the airplane (needs further implementation)
+Airplane.prototype.crash = function () { //crashes the airplane
 	this.isFlying = 0;
-	
 };
 
-Airplane.prototype.controls = function () {
+Airplane.prototype.controls = function () { 
 	if (KEY === 37 || KEY === 38) {
 		this.turn(-1);
 	} else if (KEY === 39 || KEY === 40) {
@@ -118,8 +123,6 @@ Airplane.prototype.ai = function () { //AI for the inital screen display
 };
 
 Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a specific point
-	x = clickX;
-	y = clickY;
 	var deltaX = x-this.position.x;
 	var deltaY = y-this.position.y;
 	var alpha = Math.atan(deltaY/deltaX);
@@ -157,8 +160,8 @@ Button.prototype.setRadius = function (radius) {
 	this.radius = radius;
 };
 
-Button.prototype.setOpacity = function (opacity) {
-	this.opacity = opacity;
+Button.prototype.setText = function (text) {
+	this.text = text;
 };
 
 Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
@@ -203,11 +206,70 @@ Cloud.prototype.display = function (x,y) {
 	processing.image(this.image,x,y,this.width,this.height);
 };
 
-var GameScene = function () {
+var scoreNeeded = function () { //determines what score is needed in each level
+	return (8+2*LEVEL);	
 };
 
-GameScene.prototype.setup = function () {
+var EndLevel = function (text) {
+	this.displayed = false;
+	this.text = text;
+	this.win = false;
+	this.returnToMM = new Button (400,450,120,50,processing.color(56,69,183),'Main Menu',20,60);
+	this.returnToMM.setRadius(5);
+	this.levelFinisher = new Button (400,390,120,50,processing.color(56,69,183),'Try Again',20,60);
+	this.levelFinisher.setRadius(5);
+
+};
+
+EndLevel.prototype.display = function (score) {
+	if (score >= scoreNeeded()) { //10 is a placeholder, need to be replaced by a variable
+		this.win = true;
+	} else {
+		this.win = false;
+	}
+	this.displayed = true;
+	processing.noStroke();
+	processing.fill(150,150,150,100);
+	processing.rectMode(processing.CORNER);
+	processing.rect(0,0,CWIDTH,CHEIGHT);
+	processing.textAlign(processing.CENTER);
+	processing.fill(0,0,0);
+	this.returnToMM.display();
+	if (this.win) {
+		this.levelFinisher.setText("Next Level");
+	} else {
+		this.levelFinisher.setText("Try Again");
+	}
+	this.levelFinisher.display();
+	processing.textSize(70);
+	processing.text(this.text,CWIDTH/2,0.4*CHEIGHT);
+	processing.textSize(25);
+	processing.text("Final Score: " + score,CWIDTH/2,300);
+	processing.text("Needed for the next level: " + scoreNeeded(),CWIDTH/2,340);
+};
+
+EndLevel.prototype.mouseHandler = function () { //gets called in the mouse clicked function
+	if (this.returnToMM.checkMouse()) {
+		returnToMainMenu();
+		this.displayed = false;
+	}
+	if (this.levelFinisher.checkMouse()) {
+		if (this.win) {
+			LEVEL += 1;
+		}	
+		mainScene.setup(LEVEL);
+		SCENE = 1;
+		this.displayed = false;
+	}
+};
+
+var GameScene = function () {
 	time = new Time(); //defined as global
+};
+
+GameScene.prototype.setup = function (level) {
+	this.level = level;
+	time.setup(20);
 	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,5);
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
@@ -235,6 +297,8 @@ GameScene.prototype.run = function () {
 	this.grounds[0].display();
 	processing.fill(0,0,0);
 	time.run();
+	processing.textSize(20);
+	processing.text("Level " + this.level,50,40);
 	this.shiftScene(this.aircraft); //shifts the scene by third and between two shifts clouds are displayed
 	this.displayClouds();
 	this.checkClouds(); //checks if new clouds need to be added and adds them
@@ -337,16 +401,19 @@ Ground.prototype.displayShadow = function (airplane) {
 
 var InitialScene = function() {
     GameScene.call(this);
-	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
-	this.title.setRadius(10);
-	this.newGame = new Button(400,300,200,50,processing.color(53,228,53),"New game",30,130);
-	this.newGame.setRadius(5);
-	this.newGame.hoverHighlight = 50;
-	this.aircraft = new Airplane(0,450,3);
-	this.smokes = [];
 };
 
 InitialScene.prototype = Object.create(GameScene.prototype);
+
+InitialScene.prototype.setup = function () {
+	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
+	this.title.setRadius(10);
+	this.newGame = new Button(400,300,200,50,processing.color(53,228,53),"New game",30,100);
+	this.newGame.setRadius(5);
+	this.newGame.hoverHighlight = 80;
+	this.aircraft = new Airplane(0,450,3);
+	this.smokes = [];
+};
 
 InitialScene.prototype.run = function () {
 	processing.background(72,208,235);
@@ -359,9 +426,8 @@ InitialScene.prototype.run = function () {
 	processing.textSize(20);
 	processing.textAlign(processing.CENTER);
 	processing.text("Jiri Roznovjak",400,550);
-	this.aircraft.run();
 	this.updateSmokes();
-	
+	this.aircraft.run();
 };
 
 InitialScene.prototype.checkNewGame = function () { //checks if the mouse is located above the newgame
@@ -378,10 +444,18 @@ InitialScene.prototype.displayClouds = function () {
 	clouds[4].display(600,400);
 };
 
+InitialScene.prototype.mouseHandler = function () {
+	if (this.checkNewGame()) {
+		mainScene.setup(LEVEL);
+		SCENE=1;
+	}
+};
+
 var Pause = function () { //invoked after pressing P
-	this.returnToMM = new Button(400,320,200,50,processing.color(56,69,183),'Return to Main Menu',20,40);
+	this.resume = new Button(400,300,150,50,processing.color(56,69,183),'Resume',20,60);
+	this.resume.setRadius(5);
+	this.returnToMM = new Button(400,360,150,50,processing.color(56,69,183),'Main Menu',20,60);
 	this.returnToMM.setRadius(5);
-	this.higlighted = false; //true if the return to main menu button is highlighted
 };
 
 Pause.prototype.display = function () {
@@ -391,16 +465,24 @@ Pause.prototype.display = function () {
 	processing.textAlign(processing.CENTER);
 	processing.rect(0,0,CWIDTH,CHEIGHT);
 	processing.fill(0,0,0);
-	processing.textSize(80);
+	processing.textSize(70);
 	processing.text('Pause',CWIDTH/2,0.4*CHEIGHT);
 	this.returnToMM.display();
+	this.resume.display();
 };
 
-Pause.prototype.checkHighlight = function () {
-	if (this.returnToMM.checkMouse() && !this.higlighted) {
-		this.returnToMM.display();
-		this.highlighted = true;
+Pause.prototype.mouseHandler = function () {
+	if (this.returnToMM.checkMouse()) {
+		returnToMainMenu();
+	} else if (this.resume.checkMouse()) {
+		SCENE *= -1;
 	}
+};
+
+var returnToMainMenu = function () { //what should the program do when I return to main menu
+	initialScene.setup();
+	SCENE = 0;
+	LEVEL = 1;
 };
 
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
@@ -488,13 +570,11 @@ Smoke.prototype.display = function () {
 var Time = function () { //keeps track of and displays time
 	this.displayTime = 0;
 	this.currentTime = 0;
-	this.x = 0;
-	this.y = 0;
+	this.x = 750;
+	this.y = 40;
 };
 
-Time.prototype.setup = function (x,y,start) {
-	this.x = x;
-	this.y = y;
+Time.prototype.setup = function (start) {
 	this.displayTime = start;
 	this.currentTime = processing.millis();
 };
@@ -518,24 +598,6 @@ Time.prototype.run = function () {
 	this.display();
 };
 
-var TimeOut = function () {
-	this.displayed = false;
-};
-
-TimeOut.prototype.display = function (score) {
-	this.displayed = true;
-	processing.noStroke();
-	processing.fill(150,150,150,100);
-	processing.rectMode(processing.CORNER);
-	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.textAlign(processing.CENTER);
-	processing.fill(0,0,0);
-	processing.textSize(80);
-	processing.text('Time Out!',CWIDTH/2,0.4*CHEIGHT);
-	processing.textSize(20);
-	processing.text("Final Score:",300,250);
-	processing.text(score,400,250);
-};
 
 clouds.push(new Cloud(cloud1img,214,108));
 clouds.push(new Cloud(cloud2img,165,82));
@@ -545,43 +607,46 @@ clouds.push(new Cloud(cloud5img,244,128));
 
 initialScene = new InitialScene();
 mainScene = new GameScene();
-timeOut = new TimeOut();
+timeOut = new EndLevel('Time Out!');
+crashScreen = new EndLevel('You Crashed!');
 pause = new Pause();
-mainScene.setup();
-time.setup(750,40,30);
+
+initialScene.setup();
 
 processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
-	if (SCENE === 0) {
+	if (SCENE === 0) { //initial scene
 		initialScene.run();
 	}
-	else if (SCENE === 1) {
+	else if (SCENE === 1) { //main game screen
 		mainScene.run();
 	}
-	else if (SCENE === 1.5) {
+	else if (SCENE === 1.5) { //time out
 		if (timeOut.displayed === false) {
 			timeOut.display(mainScene.score);
 		}
 	}
+	else if (SCENE === 1.7) { //crash screen
+		if (crashScreen.displayed === false) {
+			crashScreen.display(mainScene.score);
+		}
+	}
 	else if (SCENE < 0) {
-		//pause.checkHighlight(); need to finish this
 		//pause, does nothing, pause function invoked in the processing.keypressed method
 	}
 };
 
 processing.keyPressed = function () {
 	KEY = processing.keyCode;
-	if (KEY === 73) { //I
-		SCENE = 0;
-	}
-	if (KEY === 80) { //P
-		SCENE *= -1;
-		pause.display();
+	if (SCENE === 1 || SCENE < 0) {
+		if (KEY === 80) { //Pause
+			SCENE *= -1;
+			pause.display();
+		}
 	}
 	if (KEY === 82) { //R
 		SCENE=1;
-		mainScene.setup();
+		mainScene.setup(LEVEL);
 		timeOut.displayed = false;
-		time.setup(750,40,30);
 	}
 };
 
@@ -592,24 +657,17 @@ processing.keyReleased = function () { //Key is reset to 0 when released
 processing.mouseClicked = function () {
 	clickX = processing.mouseX;
 	clickY = processing.mouseY;
-	if (SCENE===0) {
-		if (initialScene.checkNewGame()) {
-			SCENE=1;
-		}
-	} else if (SCENE===1) {
-		//SCENE=0;
-	} else if (SCENE===1.5) {
-		SCENE=1;
-		mainScene.setup();
-		timeOut.displayed = false;
-		time.setup(750,40,30);
-	} else if (SCENE<0) {
-		if (pause.returnToMM.checkMouse()) {
-			SCENE = 0;
-		}
+	if (SCENE===0) { //initial scene
+		initialScene.mouseHandler();
+	} else if (SCENE===1) { //main game
+	} else if (SCENE===1.5) { //time out
+		timeOut.mouseHandler();
+	} else if (SCENE === 1.7) { //crash screen
+		crashScreen.mouseHandler();
+	} else if (SCENE<0) { //pause
+		pause.mouseHandler();
 	}
 };
-
 }
 var canvas = document.getElementById("canvas1");
 var p = new Processing(canvas, sketchProc);
