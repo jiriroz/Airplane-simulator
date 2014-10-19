@@ -138,6 +138,7 @@ Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a s
 };
 
 
+
 var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
 	this.position = new processing.PVector(x,y);
 	this.width = width;
@@ -197,6 +198,7 @@ Button.prototype.display = function () {
 };
 
 
+
 var Cloud = function (img,w,h) {
 	this.image = img;
 	this.height = h;
@@ -209,7 +211,18 @@ Cloud.prototype.display = function (x,y) {
 };
 
 
-var EndLevel = function (text) {
+
+var determineVerticalOscillation = function () { //determines velocity of vertical oscillation of rings
+	return (0.015 + (LEVEL - 1) * 0.004);
+};
+
+var determineRadiusOscillation = function () { //determines frequency of radius oscillation
+	return 0.03 + LEVEL * 0.01;
+};
+
+
+var EndLevel = function (text,canWin) {
+	this.canWin = canWin; // boolean, determines if it's possible to get Next level button in this scene
 	this.displayed = false;
 	this.text = text;
 	this.win = false;
@@ -220,7 +233,7 @@ var EndLevel = function (text) {
 };
 
 EndLevel.prototype.display = function (score) {
-	if (score >= scoreNeeded()) { //10 is a placeholder, need to be replaced by a variable
+	if (score >= scoreNeeded() && this.canWin == true) { //10 is a placeholder, need to be replaced by a variable
 		this.win = true;
 	} else {
 		this.win = false;
@@ -262,21 +275,22 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 };
 
 
+
 var GameScene = function () {
 	this.time = new Time();
 };
 
 GameScene.prototype.setup = function (level) {
 	this.level = level;
-	this.time.setup(20);
-	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,5);
+	this.time.setup(30);
+	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,4.5);
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
 	this.score = 0;
 	this.rings = [];
-	this.rings.push(new Ring(900,200,30,true));
-	this.rings.push(new Ring(1200,300,30,false));
+	this.rings.push(new Ring(900,Math.random()*400+100,30,true));
+	this.rings.push(new Ring(1200,Math.random()*400+100,30,false));
 	this.activeRing = 0; //index of the active and nonactive ring in the rings array
 	this.nonActiveRing = 1;
 	this.clouds = []; //coordinates and types of clouds
@@ -289,6 +303,7 @@ GameScene.prototype.shiftScene = function () { //shifts the scene according to h
 	processing.translate(this.xTranslate/9,0);
 };
 
+
 GameScene.prototype.run = function () {
 	processing.background(72,208,235);
 	this.grounds[0].display();
@@ -296,11 +311,11 @@ GameScene.prototype.run = function () {
 	this.time.run();
 	processing.textSize(20);
 	processing.text("Level " + this.level,50,40);
-	this.shiftScene(this.aircraft); //shifts the scene by third and between two shifts clouds are displayed
+	this.shiftScene(); //shifts the scene by third and between two shifts clouds are displayed
 	this.displayClouds();
 	this.checkClouds(); //checks if new clouds need to be added and adds them
-	this.shiftScene(this.aircraft);
-	this.shiftScene(this.aircraft);
+	this.shiftScene();
+	this.shiftScene();
 	this.grounds[0].displayShadow(this.aircraft);
 	this.updateSmokes();
 	this.rings[0].update();
@@ -320,6 +335,9 @@ GameScene.prototype.run = function () {
 	this.aircraft.run();
 	if (this.time.displayTime === 0) {
 		SCENE = 1.5;
+	}
+	if (instructionScreen.displayed === false) {
+		SCENE = 0.5;
 	}
 };
 
@@ -377,6 +395,7 @@ GameScene.prototype.updateSmokes = function () { //function that gets called in 
 	}
 };
 
+
 var Ground = function (xCenter) { //ground function, later will be animated
 	this.xCenter = xCenter;
 };
@@ -395,6 +414,7 @@ Ground.prototype.displayShadow = function (airplane) {
 	processing.fill(0,0,0,opacity);
 	processing.ellipse(airplane.position.x,CHEIGHT - GROUND_LEVEL + GROUND_SHADOW,w,w/4);
 };
+
 
 
 var InitialScene = function() {
@@ -449,6 +469,29 @@ InitialScene.prototype.mouseHandler = function () {
 };
 
 
+
+var Instructions = function () {
+	this.displayed = false;
+};
+
+Instructions.prototype.display = function () {
+	this.displayed = true;
+	processing.noStroke();
+	processing.fill(150,150,150,100);
+	processing.rectMode(processing.CORNER);
+	processing.rect(0,0,CWIDTH,CHEIGHT);
+	processing.textAlign(processing.CENTER);
+	processing.fill(0,0,0);
+	processing.textSize(40);
+	processing.text("Fly through the rings!",400,200);
+	processing.textSize(20);
+	processing.text("Press up or left arrow to fly up.",400,280);
+	processing.text("Down or right arrow to fly down.",400,320);
+	processing.text('"P" to pause.',400,360);
+	processing.textSize(25);
+	processing.text("Fly up to start.",400,430);
+};
+
 var Pause = function () { //invoked after pressing P
 	this.resume = new Button(400,300,150,50,processing.color(56,69,183),'Resume',20,60);
 	this.resume.setRadius(5);
@@ -478,6 +521,7 @@ Pause.prototype.mouseHandler = function () {
 };
 
 
+
 var returnToMainMenu = function () { //what should the program do when I return to main menu
 	initialScene.setup();
 	SCENE = 0;
@@ -485,9 +529,9 @@ var returnToMainMenu = function () { //what should the program do when I return 
 };
 
 
+
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
 	this.position = new processing.PVector(x,y);
-	this.radiusConst = radius; //constant radius, actual radius will oscilate around this value
 	this.radius = radius; //radius in the y direction before dynamic oscillation
 	this.currentRadius = radius; //actual radius in the y direction after both oscillations
 	if (visible) {
@@ -505,6 +549,7 @@ var Ring = function (x,y,radius,visible) { //visible determines whether the ring
 	this.verticalSine = 0; //helper variable for vertical oscillation
 	this.positionYStatic = this.position.y; //stores the vertical position for the oscillation
 	this.nextRingX = 0; //x-position of the next ring
+	this.yOscillationRange = 100;
 };
 
 Ring.prototype.display = function () {
@@ -516,13 +561,19 @@ Ring.prototype.display = function () {
 	}
 	this.currentRadius = this.radius;
 	if (this.radiusOscillating) {
-		var ratioRadius = 0.4 * Math.sin(this.radiusSine) + 1; //0.3 is the range of the oscillation and 1 the offset
-		this.radiusSine += 0.05; //determines how quickly the radius oscillates
+		var ratioRadius = 0.3 * Math.sin(this.radiusSine) + 1;
+		this.radiusSine += determineRadiusOscillation();
 		this.currentRadius = this.radius*ratioRadius;
 	}
 	if (this.verticalOscillating) {
-		this.position.y = 100 * Math.sin(this.verticalSine) + this.positionYStatic; //oscillating in the y direction
-		this.verticalSine += 0.02;
+		var range = this.yOscillationRange;
+		if (this.positionYStatic - range - this.currentRadius < 0) { //checks if the ring won't fly off the screen while oscillating
+			range = this.positionYStatic - this.currentRadius; //if true, lowers the range.
+		} else if (CHEIGHT-GROUND_LEVEL-this.positionYStatic - this.currentRadius < range) {
+			range = CHEIGHT-GROUND_LEVEL - this.positionYStatic - this.currentRadius;
+		}
+		this.position.y = range * Math.sin(this.verticalSine) + this.positionYStatic; //oscillating in the y direction
+		this.verticalSine += determineVerticalOscillation();
 	}
 	processing.noFill();
 	processing.strokeWeight(5);
@@ -561,21 +612,16 @@ Ring.prototype.newPosition = function () { //method that generates and stores ne
 		var xshift = Math.random()*200*(-1)-50;
 	}
 	this.position.x = this.nextRingX + xshift;
-	this.position.y = Math.random()*(CHEIGHT - 200) - GROUND_LEVEL + 50;
+	this.position.y = Math.random()*(CHEIGHT - 100 - GROUND_LEVEL) + 100;
 };
 
 Ring.prototype.newRingData = function () { //generates new ring data (except new position, for which you need to know the position of the next ring
-	if (Math.random() > 0.5) { //if true ring will have a new radius. Depend on the level.
-		this.radius = this.radiusConst*(Math.random()*0.5+0.5);
-	} else {
-		this.radius = this.radiusConst;
-	}
-	if (Math.random() > 0) { //determines if radius will be oscillating
+	if (Math.random() < 0.4 + LEVEL * 0.1) { //determines if radius will be oscillating
 		this.radiusOscillating = true;
 	} else {
 		this.radiusOscillating = false;
 	}
-	if (Math.random() > 0) { //determines vertical oscillation
+	if (Math.random() < 0.5 + LEVEL * 0.1) { //determines vertical oscillation
 		this.verticalOscillating = true;
 	} else {
 		this.verticalOscillating = false;
@@ -594,7 +640,7 @@ Ring.prototype.update = function () {
 };
 
 var scoreNeeded = function () { //determines what score is needed in each level
-	return (5+2*LEVEL);	
+	return Math.floor(4+1.5*LEVEL);	
 };
 
 
@@ -658,9 +704,10 @@ clouds.push(new Cloud(cloud5img,244,128));
 
 initialScene = new InitialScene();
 mainScene = new GameScene();
-timeOut = new EndLevel('Time Out!');
-crashScreen = new EndLevel('You Crashed!');
+timeOut = new EndLevel('Time Out!',true);
+crashScreen = new EndLevel('You Crashed!',false);
 pause = new Pause();
+instructionScreen = new Instructions();
 
 initialScene.setup();
 
@@ -672,17 +719,21 @@ processing.draw = function () { //what gets called before the shift scene stays 
 		mainScene.run();
 	}
 	else if (SCENE === 1.5) { //time out
-		if (timeOut.displayed === false) {
+		if (!timeOut.displayed) {
 			timeOut.display(mainScene.score);
 		}
 	}
 	else if (SCENE === 1.7) { //crash screen
-		if (crashScreen.displayed === false) {
+		if (!crashScreen.displayed) {
 			crashScreen.display(mainScene.score);
 		}
 	}
 	else if (SCENE < 0) {
 		//pause, does nothing, pause function invoked in the processing.keypressed method
+	} else if (SCENE === 0.5) {
+		if (!instructionScreen.displayed) {
+			instructionScreen.display();
+		}
 	}
 };
 
@@ -694,10 +745,10 @@ processing.keyPressed = function () {
 			pause.display();
 		}
 	}
-	if (KEY === 82) { //R
-		SCENE=1;
-		mainScene.setup(LEVEL);
-		timeOut.displayed = false;
+	if (SCENE === 0.5 ) {
+		if (KEY === 37 || KEY === 38) {
+			SCENE = 1;
+		}
 	}
 };
 
