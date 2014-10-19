@@ -6,14 +6,12 @@ var KEY = 0; // current processing.key pressed. for some reason, processing js d
 var SCENE = 0; //current scene. (initial screen, game, pause, crash screen, time out
 var LEVEL = 1; //current level
 processing.size(CWIDTH,CHEIGHT);
-processing.background(72,208,235);
-var sceneOffset = 100; //offset for scene shifting
 var GROUND_LEVEL = 50; //offset of the ground from the bottom
-var leftMostGround = 400, rightMostGround = 400; //x-coordinate of the leftmost and rightmost ground
-var cloudOffset = 300; //distance between two clouds in the x-direction
-var smokeOffset = 80; //time in milliseconds between airplane releases two smokes
-var smokeOpacityDecrase = 0.5; //amount by which the opacity of the smoke decrease
-var planeImg = processing.loadImage('plane.png'); //169x79px
+var CLOUD_OFFSET = 300; //distance between two clouds in the x-direction
+var SMOKE_OFFSET = 80; //time in milliseconds between airplane releases two smokes
+var SMOKE_OP_DECREASE = 0.5; //amount by which the opacity of the smoke decrease
+var GROUND_SHADOW = 15; //shadow of the airplane will appear x pixes from the margin of the ground
+var PLANE_IMG = processing.loadImage('plane.png'); //169x79px
 var PLANE_CRASHED_R = processing.loadImage('plane_crashed_right.png'); //159x77
 var PLANE_CRASHED_L = processing.loadImage('plane_crashed_left.png'); //159x77
 var cloud1img = processing.loadImage('cloud1.png'); //214x108
@@ -22,9 +20,7 @@ var cloud3img = processing.loadImage('cloud3.png'); //223x105
 var cloud4img = processing.loadImage('cloud4.png'); //222x116
 var cloud5img = processing.loadImage('cloud5.png'); //244x128
 var clouds = [];
-var initialScene, mainScene, timeOut, pause;
-var GROUND_SHADOW = 15; //shadow of the airplane will appear x pixes from the margin of the ground
-
+var initialScene, mainScene, timeOut, pause, instructionScreen;
 
 var Airplane = function (x,y,vel) {
 	this.position = new processing.PVector(x,y);
@@ -33,15 +29,15 @@ var Airplane = function (x,y,vel) {
 	this.angle = 0; //declination from the X axis in radians
 	this.acceleration = 0;
 	this.angleMag = 0.05; //magnitude with which the plane will be turning
-	this.velRange = 1;
-	this.minVel = vel;
+	this.velRange = 1; //how the velocity will be affected when flying up/down
+	this.straightVel = vel; //velocity when flying straight
 	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
 	this.smokeTime = 0; //last time smoke was deployed
 };
 
 Airplane.prototype.update = function () {
 	//updates current position according to current velocity magnitude and angle using trig
-	this.velocityMag = Math.sin(this.angle)*this.velRange + this.minVel; //velocity is a function of the angle (up-slower,down-faster)
+	this.velocityMag = Math.sin(this.angle)*this.velRange + this.straightVel; //velocity is a function of the angle (up-slower,down-faster)
 	this.velocityMag += this.acceleration;
 	this.velocityMag *= this.isFlying;
 	this.velocity.x = this.velocityMag * Math.cos(this.angle);
@@ -72,13 +68,13 @@ Airplane.prototype.display = function () {
 	processing.imageMode(processing.CENTER);
 	if (this.isFlying === 1) {
 		processing.rotate(this.angle);
-		processing.image(planeImg,0,0,56,26);
+		processing.image(PLANE_IMG,0,0,56,26);
 	} else if ((this.angle >= 0 && this.angle <= Math.PI/2) || (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2) ) {
 		processing.image(PLANE_CRASHED_R,0,0,56,26);
-		SCENE = 1.7;
+		SCENE = 3;
 	} else if ((this.angle > Math.PI/2 && this.angle < Math.PI) || (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI) ) {
 		processing.image(PLANE_CRASHED_L,0,0,56,26);
-		SCENE = 1.7;
+		SCENE = 3;
 	}
 	processing.popMatrix();
 };
@@ -88,11 +84,6 @@ Airplane.prototype.run = function () { //gets called in the draw method, handles
 	this.checkGround();
 	this.update();
 	this.display();
-};
-
-Airplane.prototype.takeOff = function () {
-	this.applyForce(0.03);
-	this.angle -=0.001;
 };
 
 Airplane.prototype.checkUp = function () { //function that handles when airplane flies off the screen up
@@ -121,22 +112,6 @@ Airplane.prototype.controls = function () {
 
 Airplane.prototype.ai = function () { //AI for the inital screen display
 };
-
-Airplane.prototype.flyToPoint = function (x,y) { //makes the airplane fly to a specific point
-	var deltaX = x-this.position.x;
-	var deltaY = y-this.position.y;
-	var alpha = Math.atan(deltaY/deltaX);
-	alpha = alpha.toFixed(1);
-	alpha = Number(alpha);
-	var currentAngle = this.angle.toFixed(1);
-	currentAngle = Number(currentAngle);
-	if (alpha > currentAngle) {
-		this.turn(1);
-	} else if (alpha < currentAngle) {
-		this.turn(-1);
-	}
-};
-
 
 
 var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
@@ -198,7 +173,6 @@ Button.prototype.display = function () {
 };
 
 
-
 var Cloud = function (img,w,h) {
 	this.image = img;
 	this.height = h;
@@ -211,7 +185,6 @@ Cloud.prototype.display = function (x,y) {
 };
 
 
-
 var determineVerticalOscillation = function () { //determines velocity of vertical oscillation of rings
 	return (0.015 + (LEVEL - 1) * 0.004);
 };
@@ -221,7 +194,7 @@ var determineRadiusOscillation = function () { //determines frequency of radius 
 };
 
 
-var EndLevel = function (text,canWin) {
+var EndLevel = function (text,canWin) { //class for crash and time out screens
 	this.canWin = canWin; // boolean, determines if it's possible to get Next level button in this scene
 	this.displayed = false;
 	this.text = text;
@@ -275,7 +248,6 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 };
 
 
-
 var GameScene = function () {
 	this.time = new Time();
 };
@@ -283,7 +255,7 @@ var GameScene = function () {
 GameScene.prototype.setup = function (level) {
 	this.level = level;
 	this.time.setup(30);
-	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,4.5);
+	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,4);
 	this.grounds = [new Ground(400)];
 	this.smokes = [];
 	this.xTranslate = 0; //how much the scene is shifted in the x-direction
@@ -302,7 +274,6 @@ GameScene.prototype.shiftScene = function () { //shifts the scene according to h
 	this.xTranslate -= this.aircraft.velocity.x;
 	processing.translate(this.xTranslate/9,0);
 };
-
 
 GameScene.prototype.run = function () {
 	processing.background(72,208,235);
@@ -334,7 +305,7 @@ GameScene.prototype.run = function () {
 	this.aircraft.controls();
 	this.aircraft.run();
 	if (this.time.displayTime === 0) {
-		SCENE = 1.5;
+		SCENE = 2;
 	}
 	if (instructionScreen.displayed === false) {
 		SCENE = 0.5;
@@ -345,7 +316,7 @@ GameScene.prototype.generateClouds = function () {
 	var x = 100;
 	for (var i = 0; i < 4; i++) {
 		this.addCloud(x);
-		x += cloudOffset;
+		x += CLOUD_OFFSET;
 	}
 };
 
@@ -371,15 +342,15 @@ GameScene.prototype.displayClouds = function () {
 
 GameScene.prototype.checkClouds = function () { //checks if a cloud needs to be added and adds one if necessary
 	if (this.clouds[this.clouds.length-1][0]-this.aircraft.position.x < 600) {
-		this.addCloud(this.clouds[this.clouds.length-1][0]+cloudOffset);
+		this.addCloud(this.clouds[this.clouds.length-1][0]+CLOUD_OFFSET);
 	}
 	if (this.aircraft.position.x-this.clouds[0][0]<600) {
-		this.addCloud(this.clouds[0][0]-cloudOffset);
+		this.addCloud(this.clouds[0][0]-CLOUD_OFFSET);
 	}
 };
 
 GameScene.prototype.updateSmokes = function () { //function that gets called in the draw method and handles all the smoke stuff
-	if (processing.millis() - this.aircraft.smokeTime > smokeOffset) {
+	if (processing.millis() - this.aircraft.smokeTime > SMOKE_OFFSET) {
 		this.aircraft.smokeTime = processing.millis();
 		this.smokes.push(new Smoke(this.aircraft.position.x,this.aircraft.position.y));
 	}
@@ -416,12 +387,12 @@ Ground.prototype.displayShadow = function (airplane) {
 };
 
 
-
 var InitialScene = function() {
     GameScene.call(this);
 };
 
 InitialScene.prototype = Object.create(GameScene.prototype);
+
 InitialScene.prototype.setup = function () {
 	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
 	this.title.setRadius(10);
@@ -469,7 +440,6 @@ InitialScene.prototype.mouseHandler = function () {
 };
 
 
-
 var Instructions = function () {
 	this.displayed = false;
 };
@@ -487,10 +457,11 @@ Instructions.prototype.display = function () {
 	processing.textSize(20);
 	processing.text("Press up or left arrow to fly up.",400,280);
 	processing.text("Down or right arrow to fly down.",400,320);
-	processing.text('"P" to pause.',400,360);
+	processing.text('P to pause.',400,360);
 	processing.textSize(25);
 	processing.text("Fly up to start.",400,430);
 };
+
 
 var Pause = function () { //invoked after pressing P
 	this.resume = new Button(400,300,150,50,processing.color(56,69,183),'Resume',20,60);
@@ -521,13 +492,11 @@ Pause.prototype.mouseHandler = function () {
 };
 
 
-
 var returnToMainMenu = function () { //what should the program do when I return to main menu
 	initialScene.setup();
 	SCENE = 0;
 	LEVEL = 1;
 };
-
 
 
 var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
@@ -639,6 +608,7 @@ Ring.prototype.update = function () {
 	this.checkOpacityToShift();
 };
 
+
 var scoreNeeded = function () { //determines what score is needed in each level
 	return Math.floor(4+1.5*LEVEL);	
 };
@@ -652,7 +622,7 @@ var Smoke = function (x,y) { //smoke behind the airplane
 };
 
 Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= smokeOpacityDecrase;
+	this.opacity -= SMOKE_OP_DECREASE;
 };
 
 Smoke.prototype.display = function () {
@@ -695,7 +665,6 @@ Time.prototype.run = function () {
 };
 
 
-
 clouds.push(new Cloud(cloud1img,214,108));
 clouds.push(new Cloud(cloud2img,165,82));
 clouds.push(new Cloud(cloud3img,223,105));
@@ -718,12 +687,12 @@ processing.draw = function () { //what gets called before the shift scene stays 
 	else if (SCENE === 1) { //main game screen
 		mainScene.run();
 	}
-	else if (SCENE === 1.5) { //time out
+	else if (SCENE === 2) { //time out
 		if (!timeOut.displayed) {
 			timeOut.display(mainScene.score);
 		}
 	}
-	else if (SCENE === 1.7) { //crash screen
+	else if (SCENE === 3) { //crash screen
 		if (!crashScreen.displayed) {
 			crashScreen.display(mainScene.score);
 		}
@@ -745,7 +714,7 @@ processing.keyPressed = function () {
 			pause.display();
 		}
 	}
-	if (SCENE === 0.5 ) {
+	if (SCENE === 0.5 ) { // instructions
 		if (KEY === 37 || KEY === 38) {
 			SCENE = 1;
 		}
@@ -761,10 +730,10 @@ processing.mouseClicked = function () {
 	clickY = processing.mouseY;
 	if (SCENE===0) { //initial scene
 		initialScene.mouseHandler();
-	} else if (SCENE===1) { //main game
-	} else if (SCENE===1.5) { //time out
+	} else if (SCENE === 1) { //main game
+	} else if (SCENE === 2) { //time out
 		timeOut.mouseHandler();
-	} else if (SCENE === 1.7) { //crash screen
+	} else if (SCENE === 3) { //crash screen
 		crashScreen.mouseHandler();
 	} else if (SCENE<0) { //pause
 		pause.mouseHandler();
