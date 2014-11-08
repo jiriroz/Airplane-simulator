@@ -36,6 +36,17 @@ var Airplane = function (x,y,vel) {
 };
 
 Airplane.prototype.update = function () {
+	this.updatePosVelAcc();
+	this.updateFullAngle();
+};
+
+Airplane.prototype.updateFullAngle = function () {
+	if (this.angle >= 2*Math.PI || this.angle <= -2*Math.PI) {
+		this.angle = 0;
+	}
+};
+
+Airplane.prototype.updatePosVelAcc = function () {
 	//updates current position according to current velocity magnitude and angle using trig
 	this.velocityMag = Math.sin(this.angle)*this.velRange + this.straightVel; //velocity is a function of the angle (up-slower,down-faster)
 	this.velocityMag += this.acceleration;
@@ -44,9 +55,6 @@ Airplane.prototype.update = function () {
 	this.velocity.y = this.velocityMag * Math.sin(this.angle);
 	this.position.add(this.velocity);
 	this.acceleration = 0;
-	if (this.angle >= 2*Math.PI || this.angle <= -2*Math.PI) {
-		this.angle = 0;
-	}
 };
 
 Airplane.prototype.applyForce = function (force) {
@@ -68,38 +76,49 @@ Airplane.prototype.display = function () {
 	processing.imageMode(processing.CENTER);
 	if (this.isFlying === 1) {
 		processing.rotate(this.angle);
-		processing.image(PLANE_IMG,0,0,56,26);
-	} else if ((this.angle >= 0 && this.angle <= Math.PI/2) || (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2) ) {
-		processing.image(PLANE_CRASHED_R,0,0,56,26);
-		SCENE = 3;
-	} else if ((this.angle > Math.PI/2 && this.angle < Math.PI) || (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI) ) {
-		processing.image(PLANE_CRASHED_L,0,0,56,26);
-		SCENE = 3;
+		this.displayImage(PLANE_IMG);
+	} else if ( this.isOrientedRight() ) {
+		this.displayImage(PLANE_CRASHED_R);
+	} else if ( this.isOrientedLeft() ) {
+		this.displayImage(PLANE_CRASHED_L);
 	}
 	processing.popMatrix();
 };
 
+Airplane.prototype.isOrientedRight = function () {
+	return ((this.angle >= 0 && this.angle <= Math.PI/2) || (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2))
+};
+
+Airplane.prototype.isOrientedLeft = function () {
+	return ((this.angle > Math.PI/2 && this.angle < Math.PI) || (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI))
+};
+
+Airplane.prototype.displayImage = function (planeImage) {
+	processing.image(planeImage,0,0,56,26);
+};
+
 Airplane.prototype.run = function () { //gets called in the draw method, handles all airplane methods
-	this.checkUp();
-	this.checkGround();
+	this.handleUpperEdge();
+	this.handleGround();
 	this.update();
 	this.display();
 };
 
-Airplane.prototype.checkUp = function () { //function that handles when airplane flies off the screen up
+Airplane.prototype.handleUpperEdge = function () { //function that handles when airplane flies off the screen up
 	if (this.position.y < -100) {
 		this.angle *= -1;
 	}
 };
 
-Airplane.prototype.checkGround = function () { //checks if the airplane crashed to the ground
+Airplane.prototype.handleGround = function () { //checks if the airplane crashed to the ground
 	if (this.position.y > CHEIGHT-GROUND_LEVEL+GROUND_SHADOW) {
 		this.crash();
 	}
 };
 
-Airplane.prototype.crash = function () { //crashes the airplane
+Airplane.prototype.crash = function () { //sets necessary variables and constants after crashing
 	this.isFlying = 0;
+	SCENE = 3;
 };
 
 Airplane.prototype.controls = function () { 
@@ -109,10 +128,6 @@ Airplane.prototype.controls = function () {
 		this.turn(1);
 	}
 };
-
-Airplane.prototype.ai = function () { //AI for the inital screen display
-};
-
 
 var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
 	this.position = new processing.PVector(x,y);
@@ -246,7 +261,6 @@ EndLevel.prototype.mouseHandler = function () { //gets called in the mouse click
 		this.displayed = false;
 	}
 };
-
 
 var GameScene = function () {
 	this.time = new Time();
