@@ -1,403 +1,430 @@
 function sketchProc(processing) {
 /*Simple 2D airplane simulator. Author Jiri Roznovjak*/
 
-var CWIDTH = 800, CHEIGHT = 600; //canvas width and height
-var KEY = 0; // current processing.key pressed. for some reason, processing js doesn't allow to use boolean variable processing.keypressed, so I have to handle it on my own. 0 signifies no processing.key is pressed.
-var SCENE = 0; //current scene. (initial screen, game, pause, crash screen, time out
-var LEVEL = 1; //current level
+//canvas width and height
+var CWIDTH = 800, CHEIGHT = 600;
+// current processing.key pressed
+var KEY = 0;
+//current scene
+var SCENE = 0;
+//current level
+var LEVEL = 1;
 processing.size(CWIDTH,CHEIGHT);
-var GROUND_LEVEL = 50; //offset of the ground from the bottom
-var CLOUD_OFFSET = 300; //distance between two clouds in the x-direction
-var SMOKE_OFFSET = 80; //time in milliseconds between airplane releases two smokes
-var SMOKE_OP_DECREASE = 0.5; //amount by which the opacity of the smoke decrease
-var GROUND_SHADOW = 15; //shadow of the airplane will appear x pixes from the margin of the ground
-var PLANE_IMG = processing.loadImage('plane.png'); //169x79px
-var PLANE_CRASHED_R = processing.loadImage('plane_crashed_right.png'); //159x77
-var PLANE_CRASHED_L = processing.loadImage('plane_crashed_left.png'); //159x77
-var cloud1img = processing.loadImage('cloud1.png'); //214x108
-var cloud2img = processing.loadImage('cloud2.png'); //164x82
-var cloud3img = processing.loadImage('cloud3.png'); //223x105
-var cloud4img = processing.loadImage('cloud4.png'); //222x116
-var cloud5img = processing.loadImage('cloud5.png'); //244x128
+//offset of the ground from the bottom
+var GROUND_LEVEL = 50;
+//shadow of the airplane will appear x pixes from the margin of the ground
+var GROUND_SHADOW = 15;
+var cloud1img = processing.loadImage('img/cloud1.png'); //214x108
+var cloud2img = processing.loadImage('img/cloud2.png'); //164x82
+var cloud3img = processing.loadImage('img/cloud3.png'); //223x105
+var cloud4img = processing.loadImage('img/cloud4.png'); //222x116
+var cloud5img = processing.loadImage('img/cloud5.png'); //244x128
 var clouds = [];
 var initialScene, mainScene, timeOut, pause, instructionScreen;
 
 var Airplane = function (x,y,vel) {
-	this.position = new processing.PVector(x,y);
-	this.velocityMag = 0; //magnitude, only in the x-direction
-	this.velocity = new processing.PVector(0,0); //needed to compute screen shifting
-	this.angle = 0; //declination from the X axis in radians
-	this.acceleration = 0;
-	this.angleMag = 0.05; //magnitude with which the plane will be turning
-	this.velRange = 1; //how the velocity will be affected when flying up/down
-	this.straightVel = vel; //velocity when flying straight
-	this.isFlying = 1; //multiplies the velocitymag, is set to 0 when crashed
-	this.smokeTime = 0; //last time smoke was deployed
+    this.position = new processing.PVector(x,y);
+    //magnitude, only in the x-direction
+    this.velocityMag = 0;
+    //needed for computing screen shifting
+    this.velocity = new processing.PVector(0,0); 
+    this.angle = 0;
+    this.acceleration = 0;
+    //magnitude with which the plane will be turning
+    this.angleMag = 0.05;
+    //how the velocity will be affected when flying up/down
+    this.velRange = 1;
+    this.straightVel = vel;
+    this.isFlying = 1;
+    this.smokeTime = 0;
+    this.imgFlying = processing.loadImage('img/plane.png'); //169x79px
+    this.imgCrashedR = processing.loadImage('img/plane_crashed_right.png'); //159x77
+    this.imgCrashedL = processing.loadImage('img/plane_crashed_left.png'); //159x77
 };
 
 Airplane.prototype.update = function () {
-	this.updatePosVelAcc();
-	this.updateFullAngle();
+    this.updatePosition();
+    this.updateAngle();
 };
 
-Airplane.prototype.updateFullAngle = function () {
-	if (this.angle >= 2*Math.PI || this.angle <= -2*Math.PI) {
-		this.angle = 0;
-	}
+Airplane.prototype.updateAngle = function () {
+    if (this.angle >= 2*Math.PI || this.angle <= -2*Math.PI) {
+        this.angle = 0;
+    }
 };
 
-Airplane.prototype.updatePosVelAcc = function () {
-	//updates current position according to current velocity magnitude and angle using trig
-	this.velocityMag = Math.sin(this.angle)*this.velRange + this.straightVel; //velocity is a function of the angle (up-slower,down-faster)
-	this.velocityMag += this.acceleration;
-	this.velocityMag *= this.isFlying;
-	this.velocity.x = this.velocityMag * Math.cos(this.angle);
-	this.velocity.y = this.velocityMag * Math.sin(this.angle);
-	this.position.add(this.velocity);
-	this.acceleration = 0;
+Airplane.prototype.updatePosition = function () {
+    //updates current position according to current velocity magnitude and angle using trig
+    this.velocityMag = Math.sin(this.angle)*this.velRange + this.straightVel;
+    this.velocityMag += this.acceleration;
+    this.velocityMag *= this.isFlying;
+    this.velocity.x = this.velocityMag * Math.cos(this.angle);
+    this.velocity.y = this.velocityMag * Math.sin(this.angle);
+    this.position.add(this.velocity);
+    this.acceleration = 0;
 };
 
 Airplane.prototype.applyForce = function (force) {
-	this.acceleration = force;
+    this.acceleration = force;
 };
 
 Airplane.prototype.turn = function (direction) {
-	//gets called in the event handler function, changes the angle of the airplane according to direction (positive/negative)
-	//clockwise positive, counterclockwise negative
-	var angleMag = this.angleMag;
-	angleMag *= direction;
-	this.angle += angleMag;
+    var angleMag = this.angleMag;
+    angleMag *= direction;
+    this.angle += angleMag;
 };
 
 Airplane.prototype.display = function () {
-	processing.fill(0,0,0);
-	processing.pushMatrix();
-	processing.translate(this.position.x,this.position.y);
-	processing.imageMode(processing.CENTER);
-	if (this.isFlying === 1) {
-		processing.rotate(this.angle);
-		this.displayImage(PLANE_IMG);
-	} else if ( this.isOrientedRight() ) {
-		this.displayImage(PLANE_CRASHED_R);
-	} else if ( this.isOrientedLeft() ) {
-		this.displayImage(PLANE_CRASHED_L);
-	}
-	processing.popMatrix();
+    processing.fill(0,0,0);
+    processing.pushMatrix();
+    processing.translate(this.position.x,this.position.y);
+    processing.imageMode(processing.CENTER);
+    if (this.isFlying === 1) {
+        processing.rotate(this.angle);
+        this.displayImage(this.imgFlying);
+    } else if ( this.isOrientedRight() ) {
+        this.displayImage(this.imgCrashedR);
+    } else if ( this.isOrientedLeft() ) {
+        this.displayImage(this.imgCrashedL);
+    }
+    processing.popMatrix();
 };
 
 Airplane.prototype.isOrientedRight = function () {
-	return ((this.angle >= 0 && this.angle <= Math.PI/2) || (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2))
+    return ((this.angle >= 0 && this.angle <= Math.PI/2) ||
+               (this.angle > -2*Math.PI && this.angle < -3*Math.PI/2));
 };
 
 Airplane.prototype.isOrientedLeft = function () {
-	return ((this.angle > Math.PI/2 && this.angle < Math.PI) || (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI))
+    return ((this.angle > Math.PI/2 && this.angle < Math.PI) ||
+               (this.angle >= -3*Math.PI/2 && this.angle <= -1*Math.PI));
 };
 
 Airplane.prototype.displayImage = function (planeImage) {
-	processing.image(planeImage,0,0,56,26);
+    processing.image(planeImage,0,0,56,26);
 };
 
-Airplane.prototype.run = function () { //gets called in the draw method, handles all airplane methods
-	this.handleUpperEdge();
-	this.handleGround();
-	this.update();
-	this.display();
+//gets called in the draw method, handles all airplane methods
+Airplane.prototype.run = function () {
+    this.handleUpperEdge();
+    this.handleGround();
+    this.update();
+    this.display();
 };
 
-Airplane.prototype.handleUpperEdge = function () { //function that handles when airplane flies off the screen up
-	if (this.position.y < -100) {
-		this.angle *= -1;
-	}
+//function that handles when airplane flies off the screen up
+Airplane.prototype.handleUpperEdge = function () {
+    if (this.position.y < -100) {
+        this.angle *= -1;
+    }
 };
 
-Airplane.prototype.handleGround = function () { //checks if the airplane crashed to the ground
-	if (this.position.y > CHEIGHT-GROUND_LEVEL+GROUND_SHADOW) {
-		this.crash();
-	}
+//checks if the airplane crashed to the ground
+Airplane.prototype.handleGround = function () {
+    if (this.position.y > CHEIGHT-GROUND_LEVEL+GROUND_SHADOW) {
+        this.crash();
+    }
 };
 
-Airplane.prototype.crash = function () { //sets necessary variables and constants after crashing
-	this.isFlying = 0;
-	SCENE = 3;
+//sets necessary variables and constants after crashing
+Airplane.prototype.crash = function () {
+    this.isFlying = 0;
+    SCENE = 3;
 };
 
 Airplane.prototype.controls = function () { 
-	if (KEY === 37 || KEY === 38) {
-		this.turn(-1);
-	} else if (KEY === 39 || KEY === 40) {
-		this.turn(1);
-	}
+    if (KEY === 37 || KEY === 38) {
+        this.turn(-1);
+    } else if (KEY === 39 || KEY === 40) {
+        this.turn(1);
+    }
 };
 
-var Button = function (x,y,width,height,color,text,textSize,opacity) { //x and y are the center of the button
-	this.position = new processing.PVector(x,y);
-	this.width = width;
-	this.height = height;
-	this.color = color;
-	this.opacity = opacity;
-	this.text = text;
-	this.textSize = textSize;
-	this.stroke = 0;
-	this.radius = 0;
-	this.hover = false;
-	this.hoverHighlight = 0;
-};
-
-Button.prototype.setStroke = function (stroke,color) { //sets rect stroke and its color
-	this.stroke = stroke;
-	this.strokeColor = color;
+//x and y are the center of the button
+var Button = function (x,y,width,height,color,text,textSize,opacity) {
+    this.position = new processing.PVector(x,y);
+    this.width = width;
+    this.height = height;
+    this.color = color;
+    this.opacity = opacity;
+    this.text = text;
+    this.textSize = textSize;
+    this.stroke = 0;
+    this.radius = 0;
+    this.hover = false;
+    this.hoverHighlight = 0;
 };
 
 Button.prototype.setRadius = function (radius) {
-	this.radius = radius;
+    this.radius = radius;
 };
 
 Button.prototype.setText = function (text) {
-	this.text = text;
+    this.text = text;
 };
 
-Button.prototype.checkMouse = function () { //returns true is mouse is above the button, nothing else
-	var right = this.position.x+this.width/2;
-	var left = this.position.x-this.width/2;
-	var up = this.position.y-this.height/2;
-	var down = this.position.y+this.height/2;
-	if (processing.mouseX > left && processing.mouseX < right && processing.mouseY > up && processing.mouseY < down) {
-		return true;
-	}
+//returns true is mouse is above the button, nothing else
+Button.prototype.checkMouse = function () {
+    var right = this.position.x+this.width/2;
+    var left = this.position.x-this.width/2;
+    var up = this.position.y-this.height/2;
+    var down = this.position.y+this.height/2;
+    return (processing.mouseX > left && processing.mouseX < right &&
+                processing.mouseY > up && processing.mouseY < down);
 };
 
 Button.prototype.display = function () {
-	if (this.stroke === 0) {
-		processing.noStroke();
-	} else {
-		processing.stroke(this.strokeColor);
-		processing.strokeWeight(this.stroke);
-	}
-	processing.rectMode(processing.CENTER);
-	if (this.hover) {
-		processing.fill(this.color,this.opacity+this.hoverHighlight);
-	} else {
-		processing.fill(this.color,this.opacity);
-	}
-	processing.rect(this.position.x,this.position.y,this.width,this.height,this.radius);
-	processing.textSize(this.textSize);
-	processing.textAlign(processing.CENTER);
-	processing.fill(0,0,0);
-	processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
-	this.hover = false;
+    if (this.stroke === 0) {
+        processing.noStroke();
+    } else {
+        processing.stroke(this.strokeColor);
+        processing.strokeWeight(this.stroke);
+    }
+    processing.rectMode(processing.CENTER);
+    if (this.hover) {
+        processing.fill(this.color,this.opacity+this.hoverHighlight);
+    } else {
+        processing.fill(this.color,this.opacity);
+    }
+    processing.rect(this.position.x,this.position.y,this.width,this.height,this.radius);
+    processing.textSize(this.textSize);
+    processing.textAlign(processing.CENTER);
+    processing.fill(0,0,0);
+    processing.text(this.text,this.position.x,this.position.y+this.textSize/3);
+    this.hover = false;
 };
 
 
 var Cloud = function (img,w,h) {
-	this.image = img;
-	this.height = h;
-	this.width = w;
+    this.image = img;
+    this.height = h;
+    this.width = w;
 };
 
 Cloud.prototype.display = function (x,y) {
-	processing.imageMode(processing.CENTER);
-	processing.image(this.image,x,y,this.width,this.height);
+    processing.imageMode(processing.CENTER);
+    processing.image(this.image,x,y,this.width,this.height);
 };
 
 
-var determineVerticalOscillation = function () { //determines velocity of vertical oscillation of rings
-	return (0.015 + (LEVEL - 1) * 0.004);
+//determines velocity of vertical oscillation of rings
+var determineVerticalOscillation = function () {
+    return (0.015 + (LEVEL - 1) * 0.004);
 };
 
-var determineRadiusOscillation = function () { //determines frequency of radius oscillation
-	return 0.03 + LEVEL * 0.01;
+//determines frequency of radius oscillation
+var determineRadiusOscillation = function () {
+    return 0.03 + LEVEL * 0.01;
 };
 
-
-var EndLevel = function (text,canWin) { //class for crash and time out screens
-	this.canWin = canWin; // boolean, determines if it's possible to get Next level button in this scene
-	this.displayed = false;
-	this.text = text;
-	this.win = false;
-	this.returnToMM = new Button (400,450,120,50,processing.color(56,69,183),'Main Menu',20,60);
-	this.returnToMM.setRadius(5);
-	this.levelFinisher = new Button (400,390,120,50,processing.color(56,69,183),'Try Again',20,60);
-	this.levelFinisher.setRadius(5);
+//class for crash and time out screens
+var EndLevel = function (text,canWin) { 
+    //boolean, determines if it's possible to get Next level button in this scene
+    this.canWin = canWin; 
+    this.displayed = false;
+    this.text = text;
+    this.win = false;
+    this.returnToMM = new Button(400,450,120,50,processing.color(56,69,183),
+                'Main Menu',20,60);
+    this.returnToMM.setRadius(5);
+    this.levelFinisher = new Button(400,390,120,50,processing.color(56,69,183),
+                'Try Again',20,60);
+    this.levelFinisher.setRadius(5);
 };
 
 EndLevel.prototype.display = function (score) {
-	if (score >= scoreNeeded() && this.canWin == true) { //10 is a placeholder, need to be replaced by a variable
-		this.win = true;
-	} else {
-		this.win = false;
-	}
-	this.displayed = true;
-	processing.noStroke();
-	processing.fill(150,150,150,100);
-	processing.rectMode(processing.CORNER);
-	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.textAlign(processing.CENTER);
-	processing.fill(0,0,0);
-	this.returnToMM.display();
-	if (this.win) {
-		this.levelFinisher.setText("Next Level");
-	} else {
-		this.levelFinisher.setText("Try Again");
-	}
-	this.levelFinisher.display();
-	processing.textSize(70);
-	processing.text(this.text,CWIDTH/2,0.4*CHEIGHT);
-	processing.textSize(25);
-	processing.text("Final Score: " + score,CWIDTH/2,300);
-	processing.text("Needed for the next level: " + scoreNeeded(),CWIDTH/2,340);
+    this.win = (score >= scoreNeeded() && this.canWin == true);
+    this.displayed = true;
+    processing.noStroke();
+    processing.fill(150,150,150,100);
+    processing.rectMode(processing.CORNER);
+    processing.rect(0,0,CWIDTH,CHEIGHT);
+    processing.textAlign(processing.CENTER);
+    processing.fill(0,0,0);
+    this.returnToMM.display();
+    if (this.win) {
+        this.levelFinisher.setText("Next Level");
+    } else {
+        this.levelFinisher.setText("Try Again");
+    }
+    this.levelFinisher.display();
+    processing.textSize(70);
+    processing.text(this.text,CWIDTH/2,0.4*CHEIGHT);
+    processing.textSize(25);
+    processing.text("Final Score: " + score,CWIDTH/2,300);
+    processing.text("Needed for the next level: " + scoreNeeded(),CWIDTH/2,340);
 };
 
-EndLevel.prototype.mouseHandler = function () { //gets called in the mouse clicked function
-	if (this.returnToMM.checkMouse()) {
-		returnToMainMenu();
-		this.displayed = false;
-	}
-	if (this.levelFinisher.checkMouse()) {
-		if (this.win) {
-			LEVEL += 1;
-		}
-		mainScene.setup(LEVEL);
-		SCENE = 1;
-		this.displayed = false;
-	}
+//gets called in the mouse clicked function
+EndLevel.prototype.mouseHandler = function () {
+    if (this.returnToMM.checkMouse()) {
+        returnToMainMenu();
+        this.displayed = false;
+    }
+    if (this.levelFinisher.checkMouse()) {
+        this.nextLevelTryAgain();
+    }
 };
+
+EndLevel.prototype.nextLevelTryAgain = function () {
+    if (this.win) {
+        LEVEL += 1;
+    }
+    mainScene.setup(LEVEL);
+    SCENE = 1;
+    this.displayed = false;
+};
+
 
 var GameScene = function () {
-	this.time = new Time();
+    this.time = new Time();
+        this.cloudOffset = 300;
 };
 
 GameScene.prototype.setup = function (level) {
-	this.level = level;
-	this.time.setup(30);
-	this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,4);
-	this.grounds = [new Ground(400)];
-	this.smokes = [];
-	this.xTranslate = 0; //how much the scene is shifted in the x-direction
-	this.score = 0;
-	this.rings = [];
-	this.rings.push(new Ring(900,Math.random()*400+100,30,true));
-	this.rings.push(new Ring(1200,Math.random()*400+100,30,false));
-	this.activeRing = 0; //index of the active and nonactive ring in the rings array
-	this.nonActiveRing = 1;
-	this.clouds = []; //coordinates and types of clouds
-	this.generateClouds();
+    this.level = level;
+    this.time.setup(30);
+    this.aircraft = new Airplane(CWIDTH/2,CHEIGHT-GROUND_LEVEL-10,4);
+    this.grounds = [new Ground(400)];
+    this.smokes = [];
+    //how much the scene is shifted in the x-direction
+    this.xTranslate = 0;
+    this.score = 0;
+    this.rings = [];
+    this.rings.push(new Ring(900,Math.random()*400+100,30,true));
+    this.rings.push(new Ring(1200,Math.random()*400+100,30,false));
+    //index of the active and nonactive ring in the rings array
+    this.activeRing = 0;
+    this.nonActiveRing = 1;
+    //stores Cloud objects
+    this.clouds = [];
+    this.generateClouds();
 };
 
-GameScene.prototype.shiftScene = function () { //shifts the scene according to how the plane is moving
-	processing.stroke(255,0,0);
-	this.xTranslate -= this.aircraft.velocity.x;
-	processing.translate(this.xTranslate/9,0);
+//shifts the scene according to how the plane is moving
+GameScene.prototype.shiftScene = function () {
+    processing.stroke(255,0,0);
+    this.xTranslate -= this.aircraft.velocity.x;
+    processing.translate(this.xTranslate/9,0);
 };
 
 GameScene.prototype.run = function () {
-	processing.background(72,208,235);
-	this.grounds[0].display();
-	processing.fill(0,0,0);
-	this.time.run();
-	processing.textSize(20);
-	processing.text("Level " + this.level,50,40);
-	this.shiftScene(); //shifts the scene by third and between two shifts clouds are displayed
-	this.displayClouds();
-	this.checkClouds(); //checks if new clouds need to be added and adds them
-	this.shiftScene();
-	this.shiftScene();
-	this.grounds[0].displayShadow(this.aircraft);
-	this.updateSmokes();
-	this.rings[0].update();
-	this.rings[1].update();
-	if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
-		this.rings[this.activeRing].storeNextRingPosition(this.rings[this.nonActiveRing].position.x);
-		this.rings[this.activeRing].fading = true;
-		this.rings[this.activeRing].appearing = false; //if it was appearing at the same time turn it off
-		this.rings[this.nonActiveRing].appearing = true;
-		this.rings[this.nonActiveRing].fading = false; //if it was fading at the same time turn it off
-		var temp = this.activeRing; //swaps active and nonactive ring
-		this.activeRing = this.nonActiveRing;
-		this.nonActiveRing = temp;
-		this.score += 1;
-	}
-	this.aircraft.controls();
-	this.aircraft.run();
-	if (this.time.displayTime === 0) {
-		SCENE = 2;
-	}
-	if (instructionScreen.displayed === false) {
-		SCENE = 0.5;
-	}
+    processing.background(72,208,235);
+    this.grounds[0].display();
+    processing.fill(0,0,0);
+    this.time.run();
+    processing.textSize(20);
+    processing.text("Level " + this.level,50,40);
+    //shifts the scene by third and between two shifts clouds are displayed
+    this.shiftScene();
+    this.displayClouds();
+    //checks if new clouds need to be added and adds them
+    this.checkClouds();
+    this.shiftScene();
+    this.shiftScene();
+    this.grounds[0].displayShadow(this.aircraft);
+    this.updateSmokes();
+    this.rings[0].update();
+    this.rings[1].update();
+    if (this.rings[this.activeRing].checkThrough(this.aircraft)) {
+        this.rings[this.activeRing].storeNextRingPosition(
+                        this.rings[this.nonActiveRing].position.x);
+        this.rings[this.activeRing].fading = true;
+        this.rings[this.activeRing].appearing = false;
+        this.rings[this.nonActiveRing].appearing = true;
+        this.rings[this.nonActiveRing].fading = false;
+        var temp = this.activeRing;
+        this.activeRing = this.nonActiveRing;
+        this.nonActiveRing = temp;
+        this.score += 1;
+    }
+    this.aircraft.controls();
+    this.aircraft.run();
+    if (this.time.displayTime === 0) {
+        SCENE = 2;
+    }
+    if (!instructionScreen.displayed) {
+        SCENE = 0.5;
+    }
 };
 
 GameScene.prototype.generateClouds = function () {
-	var x = 100;
-	for (var i = 0; i < 4; i++) {
-		this.addCloud(x);
-		x += CLOUD_OFFSET;
-	}
+    var x = 100;
+    for (var i = 0; i < 4; i++) {
+        this.addCloud(x);
+        x += this.cloudOffset;
+    }
 };
 
 GameScene.prototype.addCloud = function (x) {
-	var cloud = [];
-	cloud.push(x);
-	var y = Math.random()*100+70;
-	cloud.push(y);
-	index = Math.floor(Math.random()*4);
-	cloud.push(index);
-	if (x > 0) {
-		this.clouds.push(cloud);
-	} else {
-		this.clouds.splice(0,0,cloud);
-	}
+    var cloud = [];
+    cloud.push(x);
+    var y = Math.random()*100+70;
+    cloud.push(y);
+    index = Math.floor(Math.random()*4);
+    cloud.push(index);
+    if (x > 0) {
+        this.clouds.push(cloud);
+    } else {
+        this.clouds.splice(0,0,cloud);
+    }
 };
 
 GameScene.prototype.displayClouds = function () {
-	for (var i = 0; i < this.clouds.length; i++) {
-		clouds[this.clouds[i][2]].display(this.clouds[i][0],this.clouds[i][1]);
-	}
+    for (var i = 0; i < this.clouds.length; i++) {
+        clouds[this.clouds[i][2]].display(this.clouds[i][0],this.clouds[i][1]);
+    }
 };
 
-GameScene.prototype.checkClouds = function () { //checks if a cloud needs to be added and adds one if necessary
-	if (this.clouds[this.clouds.length-1][0]-this.aircraft.position.x < 600) {
-		this.addCloud(this.clouds[this.clouds.length-1][0]+CLOUD_OFFSET);
-	}
-	if (this.aircraft.position.x-this.clouds[0][0]<600) {
-		this.addCloud(this.clouds[0][0]-CLOUD_OFFSET);
-	}
+//checks if a cloud needs to be added and adds one if necessary
+GameScene.prototype.checkClouds = function () { 
+    if (this.clouds[this.clouds.length-1][0]-this.aircraft.position.x < 600) {
+        this.addCloud(this.clouds[this.clouds.length-1][0]+this.cloudOffset);
+    }
+    if (this.aircraft.position.x-this.clouds[0][0]<600) {
+        this.addCloud(this.clouds[0][0]-this.cloudOffset);
+    }
 };
 
-GameScene.prototype.updateSmokes = function () { //function that gets called in the draw method and handles all the smoke stuff
-	if (processing.millis() - this.aircraft.smokeTime > SMOKE_OFFSET) {
-		this.aircraft.smokeTime = processing.millis();
-		this.smokes.push(new Smoke(this.aircraft.position.x,this.aircraft.position.y));
-	}
-	for (var i=0;i<this.smokes.length;i++) {
-		this.smokes[i].update();
-		this.smokes[i].display();
-		if (this.smokes[i].opacity < 0) { //deletes the smoke that is no longer visible.
-			this.smokes.splice(i,1);
-			if (i != this.smokes.length-1) {
-				i--;
-			}
-		}
-	}
+//function that gets called in the draw method and handles all the smoke stuff
+GameScene.prototype.updateSmokes = function () { 
+    if (processing.millis() - this.aircraft.smokeTime > 80) {
+        this.aircraft.smokeTime = processing.millis();
+        this.smokes.push(new Smoke(
+                        this.aircraft.position.x,this.aircraft.position.y));
+    }
+    for (var i=0;i<this.smokes.length;i++) {
+        this.smokes[i].update();
+        this.smokes[i].display();
+        if (this.smokes[i].opacity < 0) {
+            this.smokes.splice(i,1);
+            if (i != this.smokes.length-1) {
+                i--;
+            }
+        }
+    }
 };
 
 
-var Ground = function (xCenter) { //ground function, later will be animated
-	this.xCenter = xCenter;
+var Ground = function (xCenter) {
+    this.xCenter = xCenter;
 };
 
 Ground.prototype.display = function () {
-	processing.noStroke();
-	processing.fill(131,247,73);
-	processing.rectMode(processing.CORNER);
-	processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-GROUND_LEVEL,this.xCenter+CWIDTH/2,CHEIGHT);
+    processing.noStroke();
+    processing.fill(131,247,73);
+    processing.rectMode(processing.CORNER);
+    processing.rect(this.xCenter-CWIDTH/2,CHEIGHT-GROUND_LEVEL,
+                this.xCenter+CWIDTH/2,CHEIGHT);
 };
 
 Ground.prototype.displayShadow = function (airplane) {
-	processing.noStroke();
-	var opacity = (airplane.position.y)/CHEIGHT * 100;
-	var w = airplane.position.y/CHEIGHT * 10 + 20;
-	processing.fill(0,0,0,opacity);
-	processing.ellipse(airplane.position.x,CHEIGHT - GROUND_LEVEL + GROUND_SHADOW,w,w/4);
+    processing.noStroke();
+    var opacity = (airplane.position.y)/CHEIGHT * 100;
+    var w = airplane.position.y/CHEIGHT * 10 + 20;
+    processing.fill(0,0,0,opacity);
+    processing.ellipse(airplane.position.x,
+                CHEIGHT - GROUND_LEVEL + GROUND_SHADOW,w,w/4);
 };
 
 
@@ -408,274 +435,290 @@ var InitialScene = function() {
 InitialScene.prototype = Object.create(GameScene.prototype);
 
 InitialScene.prototype.setup = function () {
-	this.title = new Button(400,200,400,100,processing.color(53,228,53),"Flight Aerobatics",50,180);
-	this.title.setRadius(10);
-	this.newGame = new Button(400,300,200,50,processing.color(53,228,53),"New game",30,100);
-	this.newGame.setRadius(5);
-	this.newGame.hoverHighlight = 80;
-	this.aircraft = new Airplane(0,450,3);
-	this.smokes = [];
+    this.title = new Button(400,200,400,100,
+                processing.color(53,228,53),"Flight Aerobatics",50,180);
+    this.title.setRadius(10);
+    this.newGame = new Button(400,300,200,50,
+                processing.color(53,228,53),"New game",30,100);
+    this.newGame.setRadius(5);
+    this.newGame.hoverHighlight = 80;
+    this.aircraft = new Airplane(0,450,3);
+    this.smokes = [];
 };
 
 InitialScene.prototype.run = function () {
-	processing.background(72,208,235);
-	this.displayClouds();
-	this.title.display();
-	if (this.newGame.checkMouse()) { //hover above the newgame button
-		this.newGame.hover = true;
-	}
-	this.newGame.display();
-	processing.textSize(20);
-	processing.textAlign(processing.CENTER);
-	processing.text("Jiri Roznovjak",400,550);
-	this.updateSmokes();
-	this.aircraft.run();
+    processing.background(72,208,235);
+    this.displayClouds();
+    this.title.display();
+    if (this.newGame.checkMouse()) {
+        this.newGame.hover = true;
+    }
+    this.newGame.display();
+    processing.textSize(20);
+    processing.textAlign(processing.CENTER);
+    processing.text("Jiri Roznovjak",400,550);
+    this.updateSmokes();
+    this.aircraft.run();
 };
 
-InitialScene.prototype.checkNewGame = function () { //checks if the mouse is located above the newgame
-	if (this.newGame.checkMouse()) {
-		return true;
-	}
+InitialScene.prototype.checkNewGame = function () {
+    return this.newGame.checkMouse();
 };
 
 InitialScene.prototype.displayClouds = function () {
-	clouds[0].display(130,100);
-	clouds[1].display(650,100);
-	clouds[2].display(400,80);
-	clouds[3].display(170,380);
-	clouds[4].display(600,400);
+    clouds[0].display(130,100);
+    clouds[1].display(650,100);
+    clouds[2].display(400,80);
+    clouds[3].display(170,380);
+    clouds[4].display(600,400);
 };
 
 InitialScene.prototype.mouseHandler = function () {
-	if (this.checkNewGame()) {
-		mainScene.setup(LEVEL);
-		SCENE=1;
-	}
+    if (this.checkNewGame()) {
+        mainScene.setup(LEVEL);
+        SCENE=1;
+    }
 };
 
 
 var Instructions = function () {
-	this.displayed = false;
+    this.displayed = false;
 };
 
 Instructions.prototype.display = function () {
-	this.displayed = true;
-	processing.noStroke();
-	processing.fill(150,150,150,100);
-	processing.rectMode(processing.CORNER);
-	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.textAlign(processing.CENTER);
-	processing.fill(0,0,0);
-	processing.textSize(40);
-	processing.text("Fly through the rings!",400,200);
-	processing.textSize(20);
-	processing.text("Press up or left arrow to fly up.",400,280);
-	processing.text("Down or right arrow to fly down.",400,320);
-	processing.text('P to pause.',400,360);
-	processing.textSize(25);
-	processing.text("Fly up to start.",400,430);
+    this.displayed = true;
+    processing.noStroke();
+    processing.fill(150,150,150,100);
+    processing.rectMode(processing.CORNER);
+    processing.rect(0,0,CWIDTH,CHEIGHT);
+    processing.textAlign(processing.CENTER);
+    processing.fill(0,0,0);
+    processing.textSize(40);
+    processing.text("Fly through the rings!",400,200);
+    processing.textSize(20);
+    processing.text("Press up or left arrow to fly up.",400,280);
+    processing.text("Down or right arrow to fly down.",400,320);
+    processing.text('P to pause.',400,360);
+    processing.textSize(25);
+    processing.text("Fly up to start.",400,430);
 };
 
-
-var Pause = function () { //invoked after pressing P
-	this.resume = new Button(400,300,150,50,processing.color(56,69,183),'Resume',20,60);
-	this.resume.setRadius(5);
-	this.returnToMM = new Button(400,360,150,50,processing.color(56,69,183),'Main Menu',20,60);
-	this.returnToMM.setRadius(5);
+//invoked after pressing P
+var Pause = function () {
+    this.resume = new Button(400,300,150,50,
+                processing.color(56,69,183),'Resume',20,60);
+    this.resume.setRadius(5);
+    this.returnToMM = new Button(400,360,150,50,
+                processing.color(56,69,183),'Main Menu',20,60);
+    this.returnToMM.setRadius(5);
 };
 
 Pause.prototype.display = function () {
-	processing.noStroke();
-	processing.fill(150,150,150,100);
-	processing.rectMode(processing.CORNER);
-	processing.textAlign(processing.CENTER);
-	processing.rect(0,0,CWIDTH,CHEIGHT);
-	processing.fill(0,0,0);
-	processing.textSize(70);
-	processing.text('Pause',CWIDTH/2,0.4*CHEIGHT);
-	this.returnToMM.display();
-	this.resume.display();
+    processing.noStroke();
+    processing.fill(150,150,150,100);
+    processing.rectMode(processing.CORNER);
+    processing.textAlign(processing.CENTER);
+    processing.rect(0,0,CWIDTH,CHEIGHT);
+    processing.fill(0,0,0);
+    processing.textSize(70);
+    processing.text('Pause',CWIDTH/2,0.4*CHEIGHT);
+    this.returnToMM.display();
+    this.resume.display();
 };
 
 Pause.prototype.mouseHandler = function () {
-	if (this.returnToMM.checkMouse()) {
-		returnToMainMenu();
-	} else if (this.resume.checkMouse()) {
-		SCENE *= -1;
-	}
+    if (this.returnToMM.checkMouse()) {
+        returnToMainMenu();
+    } else if (this.resume.checkMouse()) {
+        SCENE *= -1;
+    }
 };
 
-
-var returnToMainMenu = function () { //what should the program do when I return to main menu
-	initialScene.setup();
-	SCENE = 0;
-	LEVEL = 1;
+//what should the program do when I return to main menu
+var returnToMainMenu = function () {
+    initialScene.setup();
+    SCENE = 0;
+    LEVEL = 1;
 };
 
-
-var Ring = function (x,y,radius,visible) { //visible determines whether the ring is visible at first, it's a boolean
-	this.position = new processing.PVector(x,y);
-	this.radius = radius; //radius in the y direction before dynamic oscillation
-	this.currentRadius = radius; //actual radius in the y direction after both oscillations
-	if (visible) {
-		this.opacity = 255;
-	} else {
-		this.opacity = 0;
-	}
-	this.angle = 0;
-	this.fading = false; //the ring is not appearing nor fading when initialized
-	this.appearing = false;
-	this.rateFade = 8; //rate by which the ring will be appearing/fading
-	this.radiusOscillating = true;
-	this.radiusSine = 0; //helper variable for the sine function that causes the radius oscillation
-	this.verticalOscillating = true;
-	this.verticalSine = 0; //helper variable for vertical oscillation
-	this.positionYStatic = this.position.y; //stores the vertical position for the oscillation
-	this.nextRingX = 0; //x-position of the next ring
-	this.yOscillationRange = 100;
+//visible determines whether the ring is visible at first, it's a boolean
+var Ring = function (x,y,radius,visible) { 
+    this.position = new processing.PVector(x,y);
+    //radius in the y direction before dynamic oscillation
+    this.radius = radius;
+    //actual radius in the y direction after both oscillations
+    this.currentRadius = radius;
+    if (visible) {
+        this.opacity = 255;
+    } else {
+        this.opacity = 0;
+    }
+    this.angle = 0;
+    this.fading = false; 
+    this.appearing = false;
+    this.rateFade = 8;
+    this.radiusOscillating = true;
+    this.radiusSine = 0;
+    this.verticalOscillating = true;
+    this.verticalSine = 0;
+    //stores the vertical position for the oscillation
+    this.positionYStatic = this.position.y;
+    this.nextRingX = 0; //x-position of the next ring
+    this.yOscillationRange = 100;
 };
 
 Ring.prototype.display = function () {
-	if (this.fading === true) {
-		this.opacity -= this.rateFade;
-	}
-	if (this.appearing === true) {
-		this.opacity += this.rateFade;
-	}
-	this.currentRadius = this.radius;
-	if (this.radiusOscillating) {
-		var ratioRadius = 0.3 * Math.sin(this.radiusSine) + 1;
-		this.radiusSine += determineRadiusOscillation();
-		this.currentRadius = this.radius*ratioRadius;
-	}
-	if (this.verticalOscillating) {
-		var range = this.yOscillationRange;
-		if (this.positionYStatic - range - this.currentRadius < 0) { //checks if the ring won't fly off the screen while oscillating
-			range = this.positionYStatic - this.currentRadius; //if true, lowers the range.
-		} else if (CHEIGHT-GROUND_LEVEL-this.positionYStatic - this.currentRadius < range) {
-			range = CHEIGHT-GROUND_LEVEL - this.positionYStatic - this.currentRadius;
-		}
-		this.position.y = range * Math.sin(this.verticalSine) + this.positionYStatic; //oscillating in the y direction
-		this.verticalSine += determineVerticalOscillation();
-	}
-	processing.noFill();
-	processing.strokeWeight(5);
-	processing.stroke(255,0,0,this.opacity);
-	processing.pushMatrix();
-	processing.translate(this.position.x,this.position.y);
-	processing.rotate(this.angle);
-	processing.ellipse(0,0,this.currentRadius,this.currentRadius*2);
-	processing.popMatrix();
+    if (this.fading) {
+        this.opacity -= this.rateFade;
+    }
+    if (this.appearing) {
+        this.opacity += this.rateFade;
+    }
+    this.currentRadius = this.radius;
+    if (this.radiusOscillating) {
+        var ratioRadius = 0.3 * Math.sin(this.radiusSine) + 1;
+        this.radiusSine += determineRadiusOscillation();
+        this.currentRadius = this.radius*ratioRadius;
+    }
+    if (this.verticalOscillating) {
+        var range = this.yOscillationRange;
+        //checks if the ring won't fly off the screen while oscillating
+        if (this.positionYStatic - range - this.currentRadius < 0) {
+            //if true, lowers the range.
+            range = this.positionYStatic - this.currentRadius;
+        } else if (CHEIGHT-GROUND_LEVEL-this.positionYStatic - this.currentRadius < range) {
+            range = CHEIGHT-GROUND_LEVEL - this.positionYStatic - this.currentRadius;
+        }
+        //oscillating in the y direction
+        this.position.y = range * Math.sin(this.verticalSine) + this.positionYStatic;
+        this.verticalSine += determineVerticalOscillation();
+    }
+    processing.noFill();
+    processing.strokeWeight(5);
+    processing.stroke(255,0,0,this.opacity);
+    processing.pushMatrix();
+    processing.translate(this.position.x,this.position.y);
+    processing.rotate(this.angle);
+    processing.ellipse(0,0,this.currentRadius,this.currentRadius*2);
+    processing.popMatrix();
 };
 
-Ring.prototype.checkOpacityToShift = function () { //checks if the ring is supposed to be shifted and shifts it
-	if (this.opacity < 0) {
-		this.newPosition();
-		this.opacity = 0;
-		this.positionYStatic = this.position.y; //stores the y-position (we need it because the position will be changing)
-		this.fading = false;
-		this.newRingData();
-	}
-	if (this.opacity > 255) {
-		this.opacity = 255;
-		this.appearing = false;
-	}
+//checks if the ring is supposed to be shifted and shifts it
+Ring.prototype.checkOpacityToShift = function () {
+    if (this.opacity < 0) {
+        this.newPosition();
+        this.opacity = 0;
+        //stores the y-position (we need it because the position will be changing)
+        this.positionYStatic = this.position.y;
+        this.fading = false;
+        this.newRingData();
+    }
+    if (this.opacity > 255) {
+        this.opacity = 255;
+        this.appearing = false;
+    }
 };
 
-Ring.prototype.checkThrough = function (plane) { //returns true if airplane is in the ring
-	if (plane.position.x<this.position.x+3 && plane.position.x>this.position.x-3 && plane.position.y>this.position.y-this.currentRadius && plane.position.y<this.position.y+this.currentRadius) {
-		return true;
-	}
+//returns true if airplane is in the ring
+Ring.prototype.checkThrough = function (plane) {
+    return (plane.position.x < this.position.x+3 &&
+                plane.position.x > this.position.x-3 &&
+                plane.position.y > this.position.y-this.currentRadius &&
+                plane.position.y < this.position.y+this.currentRadius);
 };
 
-Ring.prototype.newPosition = function () { //method that generates and stores new ring position.
-	if (Math.random() < 0.75) {
-		var xshift = Math.random()*250+100;
-	} else {
-		var xshift = Math.random()*200*(-1)-50;
-	}
-	this.position.x = this.nextRingX + xshift;
-	this.position.y = Math.random()*(CHEIGHT - 100 - GROUND_LEVEL) + 100;
+//method that generates and stores new ring position.
+Ring.prototype.newPosition = function () {
+    if (Math.random() < 0.75) {
+        var xshift = Math.random()*250+100;
+    } else {
+        var xshift = Math.random()*200*(-1)-50;
+    }
+    this.position.x = this.nextRingX + xshift;
+    this.position.y = Math.random()*(CHEIGHT - 100 - GROUND_LEVEL) + 100;
 };
 
-Ring.prototype.newRingData = function () { //generates new ring data (except new position, for which you need to know the position of the next ring
-	if (Math.random() < 0.4 + LEVEL * 0.1) { //determines if radius will be oscillating
-		this.radiusOscillating = true;
-	} else {
-		this.radiusOscillating = false;
-	}
-	if (Math.random() < 0.5 + LEVEL * 0.1) { //determines vertical oscillation
-		this.verticalOscillating = true;
-	} else {
-		this.verticalOscillating = false;
-	}
-	this.verticalSine = 0;
-	this.radiusSine = 0;
+//generates new ring data (except new position, for which you need to know the position of the next ring
+Ring.prototype.newRingData = function () { 
+    //determines if radius will be oscillating
+    if (Math.random() < 0.4 + LEVEL * 0.1) {
+        this.radiusOscillating = true;
+    } else {
+        this.radiusOscillating = false;
+    }
+    //determines vertical oscillation
+    if (Math.random() < 0.5 + LEVEL * 0.1) {
+        this.verticalOscillating = true;
+    } else {
+        this.verticalOscillating = false;
+    }
+    this.verticalSine = 0;
+    this.radiusSine = 0;
 };
 
 Ring.prototype.storeNextRingPosition = function (x) {
-	this.nextRingX = x;
+    this.nextRingX = x;
 };
 
 Ring.prototype.update = function () {
-	this.display();
-	this.checkOpacityToShift();
+    this.display();
+    this.checkOpacityToShift();
+};
+
+//determines what score is needed in each level
+var scoreNeeded = function () {
+    return Math.floor(4+1.5*LEVEL);    
 };
 
 
-var scoreNeeded = function () { //determines what score is needed in each level
-	return Math.floor(4+1.5*LEVEL);	
+var Smoke = function (x,y) {
+    this.position = new processing.PVector(x,y);
+    this.opacity = Math.random()*60+50;
+    var radius = Math.random()*2+5;
+    this.radius = radius;
 };
 
-
-var Smoke = function (x,y) { //smoke behind the airplane
-	this.position = new processing.PVector(x,y);
-	this.opacity = Math.random()*60+50;
-	var radius = Math.random()*2+5;
-	this.radius = radius;
-};
-
-Smoke.prototype.update = function () { //updates opacity so that it decreases by some number
-	this.opacity -= SMOKE_OP_DECREASE;
+Smoke.prototype.update = function () {
+    this.opacity -= 0.5;
 };
 
 Smoke.prototype.display = function () {
-	processing.noStroke();
-	var col = processing.color(140,140,140,this.opacity);
-	processing.fill(col);
-	processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
+    processing.noStroke();
+    var col = processing.color(140,140,140,this.opacity);
+    processing.fill(col);
+    processing.ellipse(this.position.x,this.position.y,this.radius*2,this.radius*2);
 };
 
 
-var Time = function () { //keeps track of and displays time
-	this.displayTime = 0;
-	this.currentTime = 0;
-	this.x = 750;
-	this.y = 40;
+var Time = function () {
+    this.displayTime = 0;
+    this.currentTime = 0;
+    this.x = 750;
+    this.y = 40;
 };
 
 Time.prototype.setup = function (start) {
-	this.displayTime = start;
-	this.currentTime = processing.millis();
+    this.displayTime = start;
+    this.currentTime = processing.millis();
 };
 
 Time.prototype.update = function () {
-	if (processing.millis()-this.currentTime > 1000) {
-		this.currentTime = processing.millis();
-		this.displayTime -= 1;
-	}
+    if (processing.millis()-this.currentTime > 1000) {
+        this.currentTime = processing.millis();
+        this.displayTime -= 1;
+    }
 };
 
 Time.prototype.display = function () {
-	processing.textSize(20);
-	processing.fill(0,0,0);
-	processing.textAlign(processing.CENTER);
-	processing.text(this.displayTime,this.x,this.y);
+    processing.textSize(20);
+    processing.fill(0,0,0);
+    processing.textAlign(processing.CENTER);
+    processing.text(this.displayTime,this.x,this.y);
 };
 
 Time.prototype.run = function () {
-	this.update();
-	this.display();
+    this.update();
+    this.display();
 };
 
 
@@ -694,64 +737,74 @@ instructionScreen = new Instructions();
 
 initialScene.setup();
 
-processing.draw = function () { //what gets called before the shift scene stays the same and what after, gets shifted
-	if (SCENE === 0) { //initial scene
-		initialScene.run();
-	}
-	else if (SCENE === 1) { //main game screen
-		mainScene.run();
-	}
-	else if (SCENE === 2) { //time out
-		if (!timeOut.displayed) {
-			timeOut.display(mainScene.score);
-		}
-	}
-	else if (SCENE === 3) { //crash screen
-		if (!crashScreen.displayed) {
-			crashScreen.display(mainScene.score);
-		}
-	}
-	else if (SCENE < 0) {
-		//pause, does nothing, pause function invoked in the processing.keypressed method
-	} else if (SCENE === 0.5) {
-		if (!instructionScreen.displayed) {
-			instructionScreen.display();
-		}
-	}
+processing.draw = function () {
+    if (SCENE === 0) { //initial scene
+        initialScene.run();
+    }
+    else if (SCENE === 1) { //main game screen
+        mainScene.run();
+    }
+    else if (SCENE === 2) { //time out
+        if (!timeOut.displayed) {
+            timeOut.display(mainScene.score);
+        }
+    }
+    else if (SCENE === 3) { //crash screen
+        if (!crashScreen.displayed) {
+            crashScreen.display(mainScene.score);
+        }
+    }
+    else if (SCENE < 0) {
+        //pause, does nothing, pause function invoked in the processing.keypressed method
+    } else if (SCENE === 0.5) {
+        if (!instructionScreen.displayed) {
+            instructionScreen.display();
+        }
+    }
 };
 
 processing.keyPressed = function () {
-	KEY = processing.keyCode;
-	if (SCENE === 1 || SCENE < 0) {
-		if (KEY === 80) { //Pause
-			SCENE *= -1;
-			pause.display();
-		}
-	}
-	if (SCENE === 0.5 ) { // instructions
-		if (KEY === 37 || KEY === 38) {
-			SCENE = 1;
-		}
-	}
+    KEY = processing.keyCode;
+    if (SCENE === 1 || SCENE < 0) {
+        if (KEY === 80) { //Pause
+            SCENE *= -1;
+            pause.display();
+        }
+    }
+    if (SCENE === 0.5 ) { // instructions
+        if (KEY === 37 || KEY === 38) {
+            SCENE = 1;
+        }
+    }
+    //try again on enter in crash screen or timeout
+    if (KEY === 10) {
+        if (SCENE === 2) {
+            timeOut.nextLevelTryAgain();
+        }
+        if (SCENE === 3) {
+            crashScreen.nextLevelTryAgain();
+        }
+    }
 };
 
-processing.keyReleased = function () { //Key is reset to 0 when released
-	KEY = 0;
+//Key is reset to 0 when released
+processing.keyReleased = function () {
+    KEY = 0;
 };
 
 processing.mouseClicked = function () {
-	clickX = processing.mouseX;
-	clickY = processing.mouseY;
-	if (SCENE===0) { //initial scene
-		initialScene.mouseHandler();
-	} else if (SCENE === 1) { //main game
-	} else if (SCENE === 2) { //time out
-		timeOut.mouseHandler();
-	} else if (SCENE === 3) { //crash screen
-		crashScreen.mouseHandler();
-	} else if (SCENE<0) { //pause
-		pause.mouseHandler();
-	}
+    clickX = processing.mouseX;
+    clickY = processing.mouseY;
+    if (SCENE===0) { //initial scene
+        initialScene.mouseHandler();
+    } else if (SCENE === 1) { //main game
+    } else if (SCENE === 2) { //time out
+        timeOut.mouseHandler();
+    } else if (SCENE === 3) { //crash screen
+        crashScreen.mouseHandler();
+    } else if (SCENE<0) { //pause
+        pause.mouseHandler();
+    }
 };
 }
 var canvas = document.getElementById("canvas1");
