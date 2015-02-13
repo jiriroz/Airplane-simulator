@@ -807,5 +807,5 @@ processing.mouseClicked = function () {
     }
 };
 }
-var canvas = document.getElementById("canvas1");
+var canvas = document.getElementById("canvas");
 var p = new Processing(canvas, sketchProc);
